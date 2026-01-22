@@ -1,20 +1,5 @@
 [
   {
-    "name": "A.I.R. Gallery",
-    "lat": 40.70384,
-    "lng": -73.98708,
-    "tags": [
-      "Brooklyn",
-      "DUMBO",
-      "Art Gallery",
-      "Feminist Art",
-      "Contemporary Art"
-    ],
-    "emoji": "🎨",
-    "alt_emoji": "🏛️",
-    "address": "155 Plymouth St, Brooklyn, NY 11201, USA"
-  },
-  {
     "name": "Anthology Film Archives",
     "lat": 40.72469,
     "lng": -73.99017,
@@ -206,19 +191,6 @@
     "address": "Eris, 167 Graham Ave, Brooklyn, NY 11206, USA"
   },
   {
-    "name": "Brooklyn Heights Library",
-    "lat": 40.69565,
-    "lng": -73.9913,
-    "tags": [
-      "Library",
-      "Brooklyn",
-      "Brooklyn Heights",
-      "Brooklyn Public Library"
-    ],
-    "emoji": "📖",
-    "address": "286 Cadman Plz W, Brooklyn, NY 11201, USA"
-  },
-  {
     "name": "Brooklyn Navy Yard",
     "lat": 40.69799,
     "lng": -73.97103,
@@ -263,21 +235,6 @@
     "address": "269 4th Ave, Brooklyn, NY 11215, USA"
   },
   {
-    "name": "Carroll Gardens Pop-Up Library",
-    "lat": 40.68613,
-    "lng": -73.99476,
-    "tags": [
-      "Library",
-      "Brooklyn",
-      "Pop Up",
-      "Cobble Hill",
-      "Brooklyn Public Library",
-      "Carroll Gardens"
-    ],
-    "emoji": "📖",
-    "address": "250 Baltic St, Brooklyn, NY 11201, USA"
-  },
-  {
     "name": "Caveat",
     "lat": 40.72074,
     "lng": -73.98443,
@@ -291,20 +248,6 @@
     ],
     "emoji": "💡",
     "address": "21 A Clinton St, New York, NY 10002, USA"
-  },
-  {
-    "name": "Center for Brooklyn History",
-    "lat": 40.6948,
-    "lng": -73.99242,
-    "tags": [
-      "Brooklyn",
-      "Brooklyn Heights",
-      "Museum",
-      "History",
-      "Archive"
-    ],
-    "emoji": "🏛️",
-    "address": "128 Pierrepont St, Brooklyn, NY 11201, USA"
   },
   {
     "name": "Center for Fiction",
@@ -394,6 +337,19 @@
     "address": "88 Essex St, New York, NY 10002, USA"
   },
   {
+    "name": "Greenlight Bookstore",
+    "lat": 40.68619,
+    "lng": -73.97463,
+    "tags": [
+      "Brooklyn",
+      "Bookstore",
+      "Fort Greene",
+      "Independent"
+    ],
+    "emoji": "📚",
+    "address": "686 Fulton St, Brooklyn, NY 11217, USA"
+  },
+  {
     "name": "Housing Works Bookstore",
     "lat": 40.7246,
     "lng": -73.99658,
@@ -407,6 +363,21 @@
     ],
     "emoji": "📚",
     "address": "126 Crosby St, New York, NY 10012, USA"
+  },
+  {
+    "name": "International Center of Photography (ICP)",
+    "lat": 40.71806,
+    "lng": -73.98864,
+    "tags": [
+      "Manhattan",
+      "Museum",
+      "Lower East Side",
+      "Photography",
+      "School"
+    ],
+    "emoji": "📷",
+    "address": "79 Essex St, New York, NY 10002, USA",
+    "short_name": "International Center of Photography"
   },
   {
     "name": "Irving Plaza",
@@ -484,20 +455,6 @@
     "address": "La Plaza Cultural, 674 E 9th St, New York, NY 10009, USA"
   },
   {
-    "name": "Leonard Library",
-    "lat": 40.71359,
-    "lng": -73.94788,
-    "tags": [
-      "Library",
-      "Brooklyn",
-      "Brooklyn Public Library",
-      "Williamsburg",
-      "Carnegie"
-    ],
-    "emoji": "📖",
-    "address": "81 Devoe St, Brooklyn, NY 11211, USA"
-  },
-  {
     "name": "Littlefield",
     "lat": 40.67843,
     "lng": -73.98331,
@@ -511,6 +468,18 @@
     "emoji": "🎤",
     "alt_emoji": "🎵",
     "address": "635 Sackett St, Brooklyn, NY 11217, USA"
+  },
+  {
+    "name": "Lower East Side Farmstand",
+    "lat": 40.7151,
+    "lng": -73.9834,
+    "tags": [
+      "Manhattan",
+      "Lower East Side",
+      "Farmstand"
+    ],
+    "emoji": "🥕",
+    "address": "Grand St between Pitt St &, Willett St, New York, NY 10002, USA"
   },
   {
     "name": "Mabou Mines",
@@ -571,6 +540,21 @@
     "emoji": "📚",
     "address": "76 N 4th St Unit G, Brooklyn, NY 11249, USA",
     "short_name": "McNally Jackson"
+  },
+  {
+    "name": "Merchant's House Museum",
+    "lat": 40.72767,
+    "lng": -73.99234,
+    "tags": [
+      "Manhattan",
+      "Historic House",
+      "Museum",
+      "History",
+      "NoHo",
+      "Haunted"
+    ],
+    "emoji": "🏛️",
+    "address": "29 E 4th St, New York, NY 10003, USA"
   },
   {
     "name": "Mercury Lounge",
@@ -933,21 +917,6 @@
     "address": "370 Metropolitan Ave, Brooklyn, NY 11211, USA"
   },
   {
-    "name": "The Cooper Union",
-    "lat": 40.72808,
-    "lng": -73.99161,
-    "tags": [
-      "Manhattan",
-      "Historic",
-      "NoHo",
-      "University",
-      "Lectures",
-      "Art School"
-    ],
-    "emoji": "🎓",
-    "address": "30 Cooper Sq, New York, NY 10003, USA"
-  },
-  {
     "name": "The Delancey",
     "lat": 40.71797,
     "lng": -73.98529,
@@ -1170,20 +1139,6 @@
     "address": "125 E 11th St, New York, NY 10003, USA"
   },
   {
-    "name": "Williamsburgh Library",
-    "lat": 40.70692,
-    "lng": -73.95757,
-    "tags": [
-      "Library",
-      "Brooklyn",
-      "Brooklyn Public Library",
-      "Williamsburg",
-      "Carnegie"
-    ],
-    "emoji": "📖",
-    "address": "240 Division Ave, Brooklyn, NY 11211, USA"
-  },
-  {
     "name": "Daryl Roth Theatre",
     "lat": 40.73541,
     "lng": -73.98963,
@@ -1196,19 +1151,6 @@
     ],
     "emoji": "🎭",
     "address": "101 E 15th St 4th floor, New York, NY 10003, USA"
-  },
-  {
-    "name": "St Francis College",
-    "lat": 40.69011,
-    "lng": -73.98655,
-    "tags": [
-      "Brooklyn",
-      "Downtown Brooklyn",
-      "University",
-      "College"
-    ],
-    "emoji": "🎓",
-    "address": "179 Livingston St, Brooklyn, NY 11201, USA"
   },
   {
     "name": "Angelika Film Center & Cafe",
@@ -1454,41 +1396,6 @@
     "address": "Msgr. McGolrick Park, Russell Street &, Nassau Ave, Brooklyn, NY 11222, USA"
   },
   {
-    "name": "Sound + Fury Brewery and Kitchen",
-    "lat": 40.69166,
-    "lng": -73.98604,
-    "tags": [
-      "Brooklyn",
-      "Restaurant",
-      "Downtown Brooklyn",
-      "Brewery",
-      "Taproom",
-      "Craft Beer",
-      "Beer"
-    ],
-    "emoji": "🍺",
-    "address": "141 Lawrence St, Brooklyn, NY 11201, USA",
-    "short_name": "Sound + Fury"
-  },
-  {
-    "name": "Kehila Kedosha Janina Synagogue and Museum",
-    "lat": 40.71858,
-    "lng": -73.99118,
-    "tags": [
-      "Manhattan",
-      "Museum",
-      "LES",
-      "Lower East Side",
-      "Historic",
-      "Jewish History",
-      "Synagogue",
-      "Romaniote"
-    ],
-    "emoji": "🕍",
-    "address": "280 Broome St, New York, NY 10002, USA",
-    "short_name": "Kehila Kedosha Janina"
-  },
-  {
     "name": "Kings County Distillery",
     "lat": 40.69964,
     "lng": -73.9802,
@@ -1632,6 +1539,22 @@
     "very_short_name": "NYU"
   },
   {
+    "name": "Brooklyn Masonic Temple",
+    "lat": 40.68803,
+    "lng": -73.9695,
+    "tags": [
+      "Brooklyn",
+      "Event Space",
+      "Landmark",
+      "Venue",
+      "Historic Building",
+      "Fort Greene"
+    ],
+    "emoji": "👁️",
+    "alt_emoji": "🏛️",
+    "address": "317 Clermont Ave, Brooklyn, NY 11205, USA"
+  },
+  {
     "name": "NYC-DSA Office",
     "lat": 40.71384,
     "lng": -73.98883,
@@ -1662,21 +1585,6 @@
     "address": "New York, NY 10012, USA",
     "short_name": "New York University",
     "very_short_name": "NYU"
-  },
-  {
-    "name": "e-flux Screening Room",
-    "lat": 40.69454,
-    "lng": -73.96139,
-    "tags": [
-      "Brooklyn",
-      "Art",
-      "Cinema",
-      "Clinton Hill",
-      "Film",
-      "Screening Room"
-    ],
-    "emoji": "🎬",
-    "address": "172 Classon Ave, Brooklyn, NY 11205, USA"
   },
   {
     "name": "Film Noir Cinema",
@@ -1766,21 +1674,6 @@
     "emoji": "☁️",
     "alt_emoji": "🎭",
     "address": "85 N 1st St, Brooklyn, NY 11249, USA"
-  },
-  {
-    "name": "New Ear",
-    "lat": 40.71985,
-    "lng": -73.99371,
-    "tags": [
-      "Manhattan",
-      "Music",
-      "Venue",
-      "Lower East Side",
-      "Art",
-      "Bowery"
-    ],
-    "emoji": "🎵",
-    "address": "169 Bowery, New York, NY 10002, USA"
   },
   {
     "name": "Giorno Poetry Systems",
@@ -1929,22 +1822,6 @@
     "short_name": "Brooklyn CB1"
   },
   {
-    "name": "Brooklyn Community Board 6",
-    "lat": 40.68613,
-    "lng": -73.99476,
-    "tags": [
-      "Government",
-      "Community",
-      "Brooklyn",
-      "Cobble Hill",
-      "Office"
-    ],
-    "emoji": "🏛️",
-    "alt_emoji": "🏢",
-    "address": "250 Baltic St, Brooklyn, NY 11201, USA",
-    "short_name": "Brooklyn CB6"
-  },
-  {
     "name": "Brooklyn Community Board 2",
     "lat": 40.69353,
     "lng": -73.98765,
@@ -2057,6 +1934,20 @@
     "address": "242 Butler St, Brooklyn, NY 11217, USA"
   },
   {
+    "name": "Other Half Brewing Company (Domino Park)",
+    "lat": 40.71593,
+    "lng": -73.96685,
+    "tags": [
+      "Brooklyn",
+      "Williamsburg",
+      "Brewery",
+      "Beer"
+    ],
+    "emoji": "🍻",
+    "address": "34 River St, Brooklyn, NY 11249, USA",
+    "short_name": "Other Half Brewing"
+  },
+  {
     "name": "Brooklyn Book Bodega",
     "lat": 40.69809,
     "lng": -73.97102,
@@ -2082,19 +1973,6 @@
     ],
     "emoji": "⚙️",
     "address": "87 3rd Ave, Brooklyn, NY 11217, USA"
-  },
-  {
-    "name": "DeKalb Market Hall",
-    "lat": 40.69076,
-    "lng": -73.98306,
-    "tags": [
-      "Brooklyn",
-      "Downtown Brooklyn",
-      "Food Hall"
-    ],
-    "emoji": "🥡",
-    "alt_emoji": "🍽️",
-    "address": "445 Albee Square W, Brooklyn, NY 11201, USA"
   },
   {
     "name": "City Point Brooklyn",
@@ -2213,17 +2091,6 @@
     ],
     "emoji": "🕊️",
     "address": "15 Rutherford Place, New York, NY 10003"
-  },
-  {
-    "name": "NoHo",
-    "lat": 40.72786,
-    "lng": -73.99314,
-    "tags": [
-      "Manhattan",
-      "NoHo"
-    ],
-    "emoji": "📍",
-    "address": "Lafayette St & E 4th St, New York, NY 10003"
   },
   {
     "name": "Good Room",
@@ -2469,19 +2336,6 @@
     "address": "48 S 4th St, Brooklyn, NY 11211"
   },
   {
-    "name": "Third Door Brooklyn",
-    "lat": 40.703903,
-    "lng": -73.985449,
-    "tags": [
-      "Brooklyn",
-      "DUMBO",
-      "Arts",
-      "Yoga"
-    ],
-    "emoji": "🧘",
-    "address": "195 Plymouth St, Studio 604, Brooklyn, NY 11201"
-  },
-  {
     "name": "Berry Park",
     "lat": 40.722453,
     "lng": -73.955246,
@@ -2562,19 +2416,6 @@
     "address": "855 Lorimer St, Brooklyn, NY 11222"
   },
   {
-    "name": "The First Presbyterian Church in the City of New York",
-    "lat": 40.734815,
-    "lng": -73.995164,
-    "tags": [
-      "Manhattan",
-      "Greenwich Village",
-      "Church"
-    ],
-    "emoji": "⛪",
-    "address": "12 W 12th St, New York, NY 10011",
-    "short_name": "First Presbyterian"
-  },
-  {
     "name": "Global Center for Academic and Spiritual Life",
     "lat": 40.729905,
     "lng": -73.998173,
@@ -2638,6 +2479,20 @@
     "address": "Washington St & Front St, Brooklyn, NY 11201"
   },
   {
+    "name": "Tisch Cinema at NYU",
+    "lat": 40.729526,
+    "lng": -73.993844,
+    "tags": [
+      "Manhattan",
+      "Cinema",
+      "Greenwich Village",
+      "University"
+    ],
+    "emoji": "🎬",
+    "address": "721 Broadway, New York, NY 10003",
+    "short_name": "Tisch Cinema"
+  },
+  {
     "name": "36 E Broadway",
     "lat": 40.713753,
     "lng": -73.996316,
@@ -2664,24 +2519,19 @@
     "address": "200 4th Ave, Brooklyn, NY 11217, USA"
   },
   {
+    "name": "708 Broadway (NYU)",
+    "lat": 40.728707,
+    "lng": -73.993752,
+    "emoji": "🎓",
+    "address": "708 Broadway, New York, NY 10003, USA",
+    "short_name": "708 Broadway"
+  },
+  {
     "name": "NYU Tisch Dance",
     "lat": 40.727835,
     "lng": -73.98865,
     "emoji": "💃",
     "address": "111 2nd Ave, New York, NY 10003, USA"
-  },
-  {
-    "name": "Cobble Hill Cinemas",
-    "lat": 40.68486,
-    "lng": -73.99439,
-    "tags": [
-      "Brooklyn",
-      "Cobble Hill",
-      "Cinema",
-      "Film"
-    ],
-    "emoji": "🎬",
-    "address": "265 Court St, Brooklyn, NY 11231, USA"
   },
   {
     "name": "Gotham Gymnastics",
@@ -2698,18 +2548,6 @@
     "address": "315 Douglass St, Brooklyn, NY 11217, USA"
   },
   {
-    "name": "Josie Wood's Pub",
-    "lat": 40.730156,
-    "lng": -73.994124,
-    "tags": [
-      "Manhattan",
-      "Bar",
-      "Greenwich Village"
-    ],
-    "emoji": "🍺",
-    "address": "11 Waverly Pl, New York, NY 10003, USA"
-  },
-  {
     "name": "Squarrel Cafe",
     "lat": 40.684423,
     "lng": -73.978918,
@@ -2721,5 +2559,74 @@
     ],
     "emoji": "🎲",
     "address": "572 Atlantic Ave, Brooklyn, NY 11217, USA"
+  },
+  {
+    "name": "15th Street Friends Meeting House",
+    "lat": 40.7344,
+    "lng": -73.9854,
+    "emoji": "⛪",
+    "address": "15 Rutherford Pl, New York, NY 10003, USA"
+  },
+  {
+    "name": "Brooklyn Clay Industries",
+    "lat": 40.69975,
+    "lng": -73.97413,
+    "tags": [
+      "Brooklyn",
+      "Art",
+      "Navy Yard"
+    ],
+    "emoji": "🏺",
+    "address": "63 Flushing Ave, Brooklyn, NY 11205",
+    "short_name": "BCI Studio"
+  },
+  {
+    "name": "Kokomo NYC",
+    "lat": 40.72198,
+    "lng": -73.95971,
+    "tags": [
+      "Brooklyn",
+      "Bar",
+      "Restaurant",
+      "Williamsburg"
+    ],
+    "emoji": "🥥",
+    "address": "65 Kent Ave, Brooklyn, NY 11249",
+    "short_name": "Kokomo"
+  },
+  {
+    "name": "Baker Falls",
+    "lat": 40.72218,
+    "lng": -73.98867,
+    "tags": [
+      "Manhattan",
+      "Bar",
+      "East Village",
+      "Live Music"
+    ],
+    "emoji": "🎸",
+    "address": "192 Allen St, New York, NY 10002"
+  },
+  {
+    "name": "BAX Annex",
+    "lat": 40.68525,
+    "lng": -73.97441,
+    "emoji": "💃",
+    "address": "80 Hanson Pl, Brooklyn, NY 11217, USA",
+    "short_name": "BAX Annex"
+  },
+  {
+    "name": "Someday Bar",
+    "lat": 40.68726,
+    "lng": -73.98639,
+    "emoji": "🍺",
+    "address": "364 Atlantic Ave, Brooklyn, NY 11217, USA"
+  },
+  {
+    "name": "Recess Grove",
+    "lat": 40.712845,
+    "lng": -73.956259,
+    "emoji": "🎨",
+    "address": "327 Grand St, Brooklyn, NY 11211, USA"
   }
 ]
