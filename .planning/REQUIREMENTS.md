@@ -47,7 +47,7 @@
 
 | Feature | Reason |
 |---------|--------|
-| Multi-city architecture | Future milestone — hard-code BA for now |
+| Multi-city architecture | Future milestone -- hard-code BA for now |
 | City switcher UI | Requires multi-city architecture first |
 | New UI features | Maintain existing functionality, focus on city swap |
 | Ticket link enhancements | Future milestone |
@@ -58,25 +58,25 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | — | Pending |
-| MAP-02 | — | Pending |
-| MAP-03 | — | Pending |
-| PIPE-01 | — | Pending |
-| PIPE-02 | — | Pending |
-| PIPE-03 | — | Pending |
-| PIPE-04 | — | Pending |
-| LOC-01 | — | Pending |
-| LOC-02 | — | Pending |
-| LOC-03 | — | Pending |
-| TAG-01 | — | Pending |
-| TAG-02 | — | Pending |
-| TAG-03 | — | Pending |
+| MAP-01 | Phase 1 | Pending |
+| MAP-02 | Phase 1 | Pending |
+| MAP-03 | Phase 1 | Pending |
+| PIPE-01 | Phase 3 | Pending |
+| PIPE-02 | Phase 3 | Pending |
+| PIPE-03 | Phase 3 | Pending |
+| PIPE-04 | Phase 1 | Pending |
+| LOC-01 | Phase 2 | Pending |
+| LOC-02 | Phase 2 | Pending |
+| LOC-03 | Phase 2 | Pending |
+| TAG-01 | Phase 3 | Pending |
+| TAG-02 | Phase 3 | Pending |
+| TAG-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 13 total
-- Mapped to phases: 0
-- Unmapped: 13
+- Mapped to phases: 13
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after initial definition*
+*Last updated: 2026-02-24 after roadmap creation*
