@@ -7,16 +7,16 @@
 
 ### Map Configuration
 
-- [ ] **MAP-01**: Map default view centered on Buenos Aires (-34.60, -58.38)
-- [ ] **MAP-02**: Map zoom/pan bounds constrained to Buenos Aires metro area
-- [ ] **MAP-03**: Buenos Aires barrio labels visible on map (Palermo, San Telmo, La Boca, etc.)
+- [x] **MAP-01**: Map default view centered on Buenos Aires (-34.60, -58.38)
+- [x] **MAP-02**: Map zoom/pan bounds constrained to Buenos Aires metro area
+- [x] **MAP-03**: Buenos Aires barrio labels visible on map (Palermo, San Telmo, La Boca, etc.)
 
 ### Data Pipeline
 
 - [ ] **PIPE-01**: Crawler configured with Argentine event source URLs
 - [ ] **PIPE-02**: Gemini extraction prompts adapted for Spanish-language event content
 - [ ] **PIPE-03**: Pipeline outputs Buenos Aires events in existing JSON format
-- [ ] **PIPE-04**: NYC events and locations removed from dataset entirely
+- [x] **PIPE-04**: NYC events and locations removed from dataset entirely
 
 ### Location Data
 
@@ -58,13 +58,13 @@
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MAP-01 | Phase 1 | Pending |
-| MAP-02 | Phase 1 | Pending |
-| MAP-03 | Phase 1 | Pending |
+| MAP-01 | Phase 1 | Complete |
+| MAP-02 | Phase 1 | Complete |
+| MAP-03 | Phase 1 | Complete |
 | PIPE-01 | Phase 3 | Pending |
 | PIPE-02 | Phase 3 | Pending |
 | PIPE-03 | Phase 3 | Pending |
-| PIPE-04 | Phase 1 | Pending |
+| PIPE-04 | Phase 1 | Complete |
 | LOC-01 | Phase 2 | Pending |
 | LOC-02 | Phase 2 | Pending |
 | LOC-03 | Phase 2 | Pending |
@@ -79,4 +79,4 @@
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-24 after roadmap creation*
+*Last updated: 2026-02-25 after Phase 1 completion*
