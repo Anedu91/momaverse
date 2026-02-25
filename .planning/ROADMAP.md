@@ -12,7 +12,7 @@ Swap the existing NYC interactive event map to Buenos Aires in three phases: rep
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Map Swap & NYC Cleanup** - Repoint the map to Buenos Aires and remove all NYC-specific data
+- [x] **Phase 1: Map Swap & NYC Cleanup** - Repoint the map to Buenos Aires and remove all NYC-specific data
 - [ ] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
 - [ ] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
 
@@ -30,8 +30,8 @@ Decimal phases appear between their surrounding integers in numeric order.
   4. No NYC events, locations, or references remain in the dataset or display
 
 Plans:
-- [ ] 01-01-PLAN.md -- Map configuration, bounds, maxBounds, geolocation rename, pipeline exporter
-- [ ] 01-02-PLAN.md -- NYC data removal: geotags, related_tags, HTML text, map style names, admin titles
+- [x] 01-01-PLAN.md -- Map configuration, bounds, maxBounds, geolocation rename, pipeline exporter
+- [x] 01-02-PLAN.md -- NYC data removal: geotags, related_tags, HTML text, map style names, admin titles
 
 ### Phase 2: Buenos Aires Locations
 **Goal**: The app has a complete set of Buenos Aires cultural venues, galleries, and spaces with correct coordinates on the map
@@ -69,6 +69,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Map Swap & NYC Cleanup | 0/2 | Not started | - |
+| 1. Map Swap & NYC Cleanup | 2/2 | Complete | 2026-02-25 |
 | 2. Buenos Aires Locations | 0/1 | Not started | - |
 | 3. Pipeline & Tags | 0/2 | Not started | - |
