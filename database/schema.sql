@@ -1,4 +1,4 @@
--- fomo.nyc Database Schema
+-- Momaverse Database Schema
 -- Event venues, websites, and events data
 
 -- Create database if not exists (for local development)
