@@ -22,16 +22,16 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Goal**: The map shows Buenos Aires, not New York -- with correct center, bounds, barrio labels, and no leftover NYC data
 **Depends on**: Nothing (first phase)
 **Requirements**: MAP-01, MAP-02, MAP-03, PIPE-04
+**Plans:** 2 plans
 **Success Criteria** (what must be TRUE):
   1. Opening the app shows a map centered on Buenos Aires with the city clearly visible at default zoom
   2. Panning and zooming are constrained to the Buenos Aires metro area -- user cannot scroll to NYC or beyond reasonable BA bounds
   3. Barrio names (Palermo, San Telmo, La Boca, Recoleta, etc.) are visible as labels on the map at appropriate zoom levels
   4. No NYC events, locations, or references remain in the dataset or display
-**Plans**: TBD
 
 Plans:
-- [ ] 01-01: Map configuration and bounds
-- [ ] 01-02: NYC data removal and barrio labels
+- [ ] 01-01-PLAN.md -- Map configuration, bounds, maxBounds, geolocation rename, pipeline exporter
+- [ ] 01-02-PLAN.md -- NYC data removal: geotags, related_tags, HTML text, map style names, admin titles
 
 ### Phase 2: Buenos Aires Locations
 **Goal**: The app has a complete set of Buenos Aires cultural venues, galleries, and spaces with correct coordinates on the map
