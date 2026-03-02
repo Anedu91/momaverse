@@ -30,20 +30,6 @@ CREATE TABLE IF NOT EXISTS locations (
     INDEX idx_coords (lat, lng)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Location alternate names
-CREATE TABLE IF NOT EXISTS location_alternate_names (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    location_id INT UNSIGNED NOT NULL,
-    alternate_name VARCHAR(255) NOT NULL,
-    website_id INT UNSIGNED DEFAULT NULL COMMENT 'Scope to specific website (NULL = global)',
-
-    INDEX idx_location (location_id),
-    INDEX idx_alt_name (alternate_name),
-    INDEX idx_website_id (website_id),
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
-    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- ============================================================================
 -- WEBSITES
 -- ============================================================================
@@ -107,6 +93,20 @@ CREATE TABLE IF NOT EXISTS website_locations (
     INDEX idx_location (location_id),
     FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE,
     FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Location alternate names (after websites table for FK reference)
+CREATE TABLE IF NOT EXISTS location_alternate_names (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    location_id INT UNSIGNED NOT NULL,
+    alternate_name VARCHAR(255) NOT NULL,
+    website_id INT UNSIGNED DEFAULT NULL COMMENT 'Scope to specific website (NULL = global)',
+
+    INDEX idx_location (location_id),
+    INDEX idx_alt_name (alternate_name),
+    INDEX idx_website_id (website_id),
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Website extra tags (tags to apply to all events from this website)
