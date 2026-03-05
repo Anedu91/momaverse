@@ -67,6 +67,8 @@ CREATE TABLE IF NOT EXISTS websites (
     crawl_timeout INT UNSIGNED DEFAULT NULL COMMENT 'Timeout in seconds for entire crawl operation (default: 120)',
     crawl_frequency_locked BOOLEAN DEFAULT FALSE COMMENT 'If true, auto-frequency adjustment is disabled',
     process_images TINYINT(1) DEFAULT NULL COMMENT 'Use vision model for image-based extraction',
+    crawl_mode ENUM('browser', 'json_api') DEFAULT 'browser' COMMENT 'How to crawl: browser (Crawl4AI) or json_api (HTTP GET)',
+    json_api_config JSON DEFAULT NULL COMMENT 'Config for json_api mode: jsonp_callback, data_path, fields_include, date_window_days',
 
     INDEX idx_name (name),
     INDEX idx_last_crawled (last_crawled_at),

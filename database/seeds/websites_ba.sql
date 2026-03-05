@@ -111,3 +111,19 @@ INSERT INTO website_urls (website_id, url, sort_order) VALUES
 
 INSERT INTO website_tags (website_id, tag) VALUES
 (@microteatro_id, 'Theater');
+
+-- ============================================================================
+-- Configure Alternativa Teatral for JSON API crawling
+-- Uses JSONP endpoint instead of browser crawl (infinite scroll fails)
+-- ============================================================================
+
+UPDATE websites
+SET crawl_mode = 'json_api',
+    json_api_config = JSON_OBJECT(
+        'jsonp_callback', 'jsoncallback',
+        'data_path', 'espectaculos',
+        'fields_include', JSON_ARRAY('titulo', 'clasificaciones', 'lugares', 'url', 'url_entradas'),
+        'date_window_days', 30,
+        'base_url', 'https://www.alternativateatral.com/get-json.php?t=novedades&r=cartelera'
+    )
+WHERE name = 'Alternativa Teatral';
