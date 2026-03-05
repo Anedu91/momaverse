@@ -13,7 +13,7 @@ Swap the existing NYC interactive event map to Buenos Aires in three phases: rep
 Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Map Swap & NYC Cleanup** - Repoint the map to Buenos Aires and remove all NYC-specific data
-- [ ] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
+- [x] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
 - [ ] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
 
 ## Phase Details
@@ -44,7 +44,7 @@ Plans:
   3. Location data uses the existing schema format -- no structural changes to the data model
 
 Plans:
-- [ ] 02-01-PLAN.md -- Update geocode.php for BA, create seed SQL files for ~40 venues across museums, cultural centers, galleries, and theaters
+- [x] 02-01-PLAN.md -- Update geocode.php for BA, create seed SQL files for ~40 venues across museums, cultural centers, galleries, and theaters
 
 ### Phase 3: Pipeline & Tags
 **Goal**: The data pipeline crawls Argentine event sources, extracts Spanish-language events via Gemini, and the tag system supports BA cultural categories -- making the app fully functional with live Buenos Aires data
@@ -70,5 +70,5 @@ Phases execute in numeric order: 1 -> 2 -> 3
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Map Swap & NYC Cleanup | 2/2 | Complete | 2026-02-25 |
-| 2. Buenos Aires Locations | 0/1 | Not started | - |
+| 2. Buenos Aires Locations | 1/1 | Complete | 2026-03-05 |
 | 3. Pipeline & Tags | 0/2 | Not started | - |

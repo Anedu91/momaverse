@@ -20,9 +20,9 @@
 
 ### Location Data
 
-- [ ] **LOC-01**: Buenos Aires venues, galleries, and cultural spaces added to location database
-- [ ] **LOC-02**: BA venue addresses geocoded with correct lat/lng coordinates
-- [ ] **LOC-03**: Location data structure matches existing format (no schema changes)
+- [x] **LOC-01**: Buenos Aires venues, galleries, and cultural spaces added to location database
+- [x] **LOC-02**: BA venue addresses geocoded with correct lat/lng coordinates
+- [x] **LOC-03**: Location data structure matches existing format (no schema changes)
 
 ### Tags & Categories
 
@@ -65,9 +65,9 @@
 | PIPE-02 | Phase 3 | Pending |
 | PIPE-03 | Phase 3 | Pending |
 | PIPE-04 | Phase 1 | Complete |
-| LOC-01 | Phase 2 | Pending |
-| LOC-02 | Phase 2 | Pending |
-| LOC-03 | Phase 2 | Pending |
+| LOC-01 | Phase 2 | Complete |
+| LOC-02 | Phase 2 | Complete |
+| LOC-03 | Phase 2 | Complete |
 | TAG-01 | Phase 3 | Pending |
 | TAG-02 | Phase 3 | Pending |
 | TAG-03 | Phase 3 | Pending |
@@ -79,4 +79,4 @@
 
 ---
 *Requirements defined: 2026-02-24*
-*Last updated: 2026-02-25 after Phase 1 completion*
+*Last updated: 2026-03-05 after Phase 2 completion*
