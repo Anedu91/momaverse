@@ -46,8 +46,10 @@ CREATE TABLE IF NOT EXISTS websites (
     js_code TEXT DEFAULT NULL COMMENT 'JavaScript code to execute before crawling',
     keywords VARCHAR(255) DEFAULT NULL COMMENT 'URL filter keywords',
     max_pages INT UNSIGNED DEFAULT 30 COMMENT 'Max pages for deep crawl',
+    max_batches INT UNSIGNED DEFAULT NULL COMMENT 'Max extraction batches for large crawls',
     notes TEXT DEFAULT NULL,
     disabled BOOLEAN DEFAULT FALSE COMMENT 'If true, skip this website during crawling',
+    source_type ENUM('primary', 'aggregator') DEFAULT 'primary' COMMENT 'primary=direct source, aggregator=lists events from other venues',
     crawl_after DATE DEFAULT NULL COMMENT 'Do not crawl until this date (for seasonal events)',
     force_crawl BOOLEAN DEFAULT FALSE COMMENT 'If true, crawl this website on next run regardless of frequency',
     last_crawled_at TIMESTAMP NULL COMMENT 'When this website was last crawled',
@@ -64,6 +66,7 @@ CREATE TABLE IF NOT EXISTS websites (
     scroll_delay DECIMAL(3,2) DEFAULT NULL COMMENT 'Seconds to pause between scroll steps (default: 0.2)',
     crawl_timeout INT UNSIGNED DEFAULT NULL COMMENT 'Timeout in seconds for entire crawl operation (default: 120)',
     crawl_frequency_locked BOOLEAN DEFAULT FALSE COMMENT 'If true, auto-frequency adjustment is disabled',
+    process_images TINYINT(1) DEFAULT NULL COMMENT 'Use vision model for image-based extraction',
 
     INDEX idx_name (name),
     INDEX idx_last_crawled (last_crawled_at),
