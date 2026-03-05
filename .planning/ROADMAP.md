@@ -50,17 +50,17 @@ Plans:
 **Goal**: The data pipeline crawls Argentine event sources, extracts Spanish-language events via Gemini, and the tag system supports BA cultural categories -- making the app fully functional with live Buenos Aires data
 **Depends on**: Phase 2
 **Requirements**: PIPE-01, PIPE-02, PIPE-03, TAG-01, TAG-02, TAG-03
+**Plans:** 2 plans
 **Success Criteria** (what must be TRUE):
   1. Running the pipeline crawls configured Argentine event source URLs and produces structured event data
   2. Spanish-language event content is correctly extracted by Gemini -- event titles, descriptions, dates, and venues are parsed accurately
   3. Pipeline output is valid JSON in the existing format, loadable by the frontend without changes
   4. Tag set reflects BA art scene categories (galleries, theater, dance, music, street art, etc.) and tag filtering/search works with the new tags
   5. Related tags system connects BA cultural categories meaningfully (e.g., selecting "Teatro" surfaces related performance tags)
-**Plans**: TBD
 
 Plans:
-- [ ] 03-01: Pipeline configuration and Spanish extraction
-- [ ] 03-02: BA tag taxonomy and related tags
+- [ ] 03-01-PLAN.md -- Pipeline prompt adaptation for BA/Spanish, processor NYC cleanup, website seed SQL, tag rules
+- [ ] 03-02-PLAN.md -- BA cultural category relationships in related_tags.json
 
 ## Progress
 
