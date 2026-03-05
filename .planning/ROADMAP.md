@@ -14,7 +14,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [x] **Phase 1: Map Swap & NYC Cleanup** - Repoint the map to Buenos Aires and remove all NYC-specific data
 - [x] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
-- [ ] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
+- [x] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
 
 ## Phase Details
 
@@ -59,8 +59,8 @@ Plans:
   5. Related tags system connects BA cultural categories meaningfully (e.g., selecting "Teatro" surfaces related performance tags)
 
 Plans:
-- [ ] 03-01-PLAN.md -- Pipeline prompt adaptation for BA/Spanish, processor NYC cleanup, website seed SQL, tag rules
-- [ ] 03-02-PLAN.md -- BA cultural category relationships in related_tags.json
+- [x] 03-01-PLAN.md -- Pipeline prompt adaptation for BA/Spanish, processor NYC cleanup, website seed SQL, tag rules
+- [x] 03-02-PLAN.md -- BA cultural category relationships in related_tags.json
 
 ## Progress
 
@@ -71,4 +71,4 @@ Phases execute in numeric order: 1 -> 2 -> 3
 |-------|----------------|--------|-----------|
 | 1. Map Swap & NYC Cleanup | 2/2 | Complete | 2026-02-25 |
 | 2. Buenos Aires Locations | 1/1 | Complete | 2026-03-05 |
-| 3. Pipeline & Tags | 0/2 | Not started | - |
+| 3. Pipeline & Tags | 2/2 | Complete | 2026-03-05 |
