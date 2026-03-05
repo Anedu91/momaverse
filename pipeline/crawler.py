@@ -5,7 +5,11 @@ Uses Crawl4AI to crawl event websites and store content in the database.
 """
 
 import asyncio
+import json
+import re
 from datetime import datetime, timedelta
+
+import httpx
 from crawl4ai import CacheMode
 import db
 
@@ -27,6 +31,232 @@ except ImportError:
     print("Error: crawl4ai is required.")
     print("Install it with: pip install crawl4ai")
     raise
+
+
+def strip_jsonp(text, callback_name=None):
+    """Strip JSONP callback wrapper to get pure JSON string.
+
+    If callback_name provided, strip that exact prefix.
+    Otherwise use generic regex for any callback function name.
+    Returns text unchanged if neither matches (already plain JSON).
+    """
+    text = text.strip()
+    if callback_name:
+        prefix = callback_name + '('
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+            # Remove trailing );
+            text = text.rstrip(';').rstrip()
+            if text.endswith(')'):
+                text = text[:-1]
+            return text
+    # Generic JSONP pattern
+    match = re.match(r'^[a-zA-Z_]\w*\s*\((.*)\)\s*;?\s*$', text, re.DOTALL)
+    if match:
+        return match.group(1)
+    return text
+
+
+def filter_by_date_window(events_dict, days_ahead=30):
+    """Filter events dict (keyed by event ID) to only those with upcoming dates.
+
+    Keeps events that have at least one proxima_fecha within the date window,
+    or events with NO proxima_fecha at all (let Gemini decide relevance).
+    Only excludes events whose ALL dates are past or beyond the window.
+    """
+    now = datetime.now()
+    window_end = now + timedelta(days=days_ahead)
+    filtered = {}
+
+    for event_id, event in events_dict.items():
+        dates_found = []
+
+        # Navigate: event > lugares > * > funciones > * > proxima_fecha
+        lugares = event.get('lugares', {})
+        if isinstance(lugares, dict):
+            for lugar_id, lugar in lugares.items():
+                funciones = lugar.get('funciones', {})
+                if isinstance(funciones, dict):
+                    for func_id, funcion in funciones.items():
+                        proxima = funcion.get('proxima_fecha')
+                        if proxima:
+                            try:
+                                dt = datetime.strptime(proxima, '%Y-%m-%d %H:%M')
+                                dates_found.append(dt)
+                            except (ValueError, TypeError):
+                                pass
+
+        if not dates_found:
+            # No dates found -- include (let Gemini decide)
+            filtered[event_id] = event
+        elif any(now <= dt <= window_end for dt in dates_found):
+            # At least one date within window
+            filtered[event_id] = event
+        # else: all dates are past or beyond window -- exclude
+
+    return filtered
+
+
+def flatten_events_to_markdown(events_dict, fields_include=None):
+    """Convert filtered JSON events dict to markdown for Gemini extraction.
+
+    For each event produces:
+    - Title, tags, venues with addresses, show times, URL, tickets link
+    - Blank line between events
+    """
+    lines = []
+
+    for event_id, event in events_dict.items():
+        titulo = event.get('titulo', f'Event {event_id}')
+        lines.append(f'## {titulo}')
+
+        # Tags from clasificaciones
+        clasificaciones = event.get('clasificaciones', {})
+        if isinstance(clasificaciones, dict):
+            tag_names = [c.get('descripcion', '') for c in clasificaciones.values() if c.get('descripcion')]
+            if tag_names:
+                lines.append(f'**Tags:** {", ".join(tag_names)}')
+
+        # Venues and showtimes
+        lugares = event.get('lugares', {})
+        if isinstance(lugares, dict):
+            for lugar_id, lugar in lugares.items():
+                nombre = lugar.get('nombre', '')
+                direccion = lugar.get('direccion', '')
+                zona = lugar.get('zona', '')
+                if nombre:
+                    lines.append(f'**Venue:** {nombre}')
+                addr_parts = [p for p in [direccion, zona] if p]
+                if addr_parts:
+                    lines.append(f'**Address:** {", ".join(addr_parts)}')
+
+                funciones = lugar.get('funciones', {})
+                if isinstance(funciones, dict):
+                    for func_id, funcion in funciones.items():
+                        dia = funcion.get('dia', '')
+                        hora = funcion.get('hora', '')
+                        proxima = funcion.get('proxima_fecha', '')
+                        parts = [p for p in [dia, hora] if p]
+                        time_str = ' '.join(parts)
+                        if proxima:
+                            time_str += f' (next: {proxima})'
+                        if time_str.strip():
+                            lines.append(f'- {time_str.strip()}')
+
+        # URL
+        url_slug = event.get('url', '')
+        if url_slug:
+            lines.append(f'**URL:** https://www.alternativateatral.com/{url_slug}')
+
+        # Tickets
+        url_entradas = event.get('url_entradas', '')
+        if url_entradas:
+            lines.append(f'**Tickets:** {url_entradas}')
+
+        lines.append('')  # Blank line between events
+
+    return '\n'.join(lines)
+
+
+async def crawl_json_api(website, cursor, connection, crawl_run_id):
+    """Crawl a website via HTTP GET to a JSON/JSONP API endpoint.
+
+    Args:
+        website: Website dict with json_api_config, name, id, etc.
+        cursor: Database cursor
+        connection: Database connection
+        crawl_run_id: ID of the current crawl run
+
+    Returns:
+        crawl_result_id if successful, None otherwise
+    """
+    name = website['name']
+    config = website.get('json_api_config', {})
+
+    if not config:
+        print(f"  Skipping {name}: no json_api_config")
+        return None
+
+    # Create safe filename and crawl result record
+    safe_filename = create_safe_filename(name, '.md')
+    crawl_result_id = db.create_crawl_result(
+        cursor, connection, crawl_run_id, website['id'], safe_filename
+    )
+
+    try:
+        # Determine URL
+        url = config.get('base_url')
+        if not url:
+            urls = website.get('urls', [])
+            if urls:
+                url = urls[0]['url'] if isinstance(urls[0], dict) else urls[0]
+        if not url:
+            db.update_crawl_result_failed(cursor, connection, crawl_result_id, "No URL configured")
+            db.update_website_last_crawled(cursor, connection, website['id'])
+            return None
+
+        print(f"  Crawling {name} via JSON API...")
+        print(f"    - GET {url}")
+
+        # HTTP GET
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+
+        raw_text = response.text
+
+        # Strip JSONP wrapper if configured
+        jsonp_callback = config.get('jsonp_callback')
+        if jsonp_callback:
+            raw_text = strip_jsonp(raw_text, jsonp_callback)
+
+        # Parse JSON
+        data = json.loads(raw_text)
+
+        # Navigate data_path (e.g., 'espectaculos')
+        data_path = config.get('data_path', '')
+        if data_path:
+            for key in data_path.split('.'):
+                if key and isinstance(data, dict):
+                    data = data.get(key, {})
+
+        total_events = len(data) if isinstance(data, dict) else 0
+        print(f"    - Total events in API: {total_events}")
+
+        # Filter by date window
+        date_window_days = config.get('date_window_days', 30)
+        if isinstance(data, dict):
+            filtered = filter_by_date_window(data, date_window_days)
+        else:
+            filtered = data
+
+        filtered_count = len(filtered) if isinstance(filtered, dict) else 0
+        print(f"    - Events after date filter ({date_window_days}d): {filtered_count}")
+
+        # Flatten to markdown
+        fields_include = config.get('fields_include')
+        markdown = flatten_events_to_markdown(filtered, fields_include)
+
+        if not markdown.strip():
+            db.update_crawl_result_failed(
+                cursor, connection, crawl_result_id, "No events after filtering"
+            )
+            db.update_website_last_crawled(cursor, connection, website['id'])
+            return None
+
+        # Store markdown (same as browser crawl path)
+        db.update_crawl_result_crawled(cursor, connection, crawl_result_id, markdown)
+        db.update_website_last_crawled(cursor, connection, website['id'])
+
+        print(f"    - Stored {len(markdown)} chars of markdown ({filtered_count} events)")
+        return crawl_result_id
+
+    except Exception as e:
+        error_msg = str(e)
+        print(f"    - Error crawling {name}: {error_msg}")
+        db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
+        db.update_website_last_crawled(cursor, connection, website['id'])
+        return None
 
 
 def resolve_url_templates(url):
