@@ -1,36 +1,41 @@
 -- Seed: Tag Rules for Buenos Aires Pipeline
--- Spanish-to-English rewrites and BA-redundant exclusions
--- 22 rewrite rules, 5 exclude rules
+-- English-to-Spanish rewrites and BA-redundant exclusions
+-- Tags display in Spanish for BA users
 
 USE fomo;
 
 -- ============================================================================
--- REWRITE RULES (Spanish -> English)
+-- REWRITE RULES (English -> Spanish)
+-- Gemini sometimes outputs English tags; normalize to Spanish
 -- ============================================================================
 
 INSERT INTO tag_rules (rule_type, pattern, replacement) VALUES
-('rewrite', 'musica', 'Music'),
-('rewrite', 'danza', 'Dance'),
-('rewrite', 'teatro', 'Theater'),
-('rewrite', 'arte', 'Art'),
-('rewrite', 'exposicion', 'Exhibition'),
-('rewrite', 'concierto', 'Concert'),
-('rewrite', 'espectaculo', 'Show'),
-('rewrite', 'gratis', 'Free Entry'),
-('rewrite', 'entradalibre', 'Free Entry'),
-('rewrite', 'entradalibr', 'Free Entry'),
-('rewrite', 'fotografia', 'Photography'),
-('rewrite', 'literatura', 'Literature'),
-('rewrite', 'pelicula', 'Film'),
-('rewrite', 'taller', 'Workshop'),
-('rewrite', 'charla', 'Talk'),
-('rewrite', 'conferencia', 'Lecture'),
-('rewrite', 'feria', 'Fair'),
-('rewrite', 'mercado', 'Market'),
-('rewrite', 'festival', 'Festival'),
-('rewrite', 'circo', 'Circus'),
-('rewrite', 'comedia', 'Comedy'),
-('rewrite', 'poesia', 'Poetry');
+('rewrite', 'music', 'Música'),
+('rewrite', 'dance', 'Danza'),
+('rewrite', 'theater', 'Teatro'),
+('rewrite', 'theatre', 'Teatro'),
+('rewrite', 'art', 'Arte'),
+('rewrite', 'exhibition', 'Exposición'),
+('rewrite', 'concert', 'Concierto'),
+('rewrite', 'show', 'Espectáculo'),
+('rewrite', 'freeentry', 'Entrada Libre'),
+('rewrite', 'free entry', 'Entrada Libre'),
+('rewrite', 'photography', 'Fotografía'),
+('rewrite', 'literature', 'Literatura'),
+('rewrite', 'film', 'Cine'),
+('rewrite', 'workshop', 'Taller'),
+('rewrite', 'talk', 'Charla'),
+('rewrite', 'lecture', 'Conferencia'),
+('rewrite', 'fair', 'Feria'),
+('rewrite', 'market', 'Mercado'),
+('rewrite', 'circus', 'Circo'),
+('rewrite', 'comedy', 'Comedia'),
+('rewrite', 'poetry', 'Poesía'),
+('rewrite', 'outdoor', 'Al Aire Libre'),
+('rewrite', 'gallery', 'Galería'),
+('rewrite', 'sculpture', 'Escultura'),
+('rewrite', 'opening', 'Inauguración'),
+('rewrite', 'museum', 'Museo');
 
 -- ============================================================================
 -- EXCLUDE RULES (BA-redundant tags)

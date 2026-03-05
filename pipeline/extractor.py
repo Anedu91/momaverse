@@ -744,7 +744,7 @@ Based on the website content below, extract all upcoming events. For each event,
   - end_time: End time (optional)
 - description: 1-3 sentence description
 - url: Specific event URL if available
-- hashtags: 4-7 CamelCase tags (e.g., ["Comedy", "Music", "Outdoor", "LatinJazz"]). Include a mix of high-level and granular tags. Avoid location-specific or Buenos Aires-redundant tags. Generate all tags in ENGLISH even though source content may be in Spanish.
+- hashtags: 4-7 CamelCase tags in Spanish (e.g., ["Comedia", "Música", "Teatro", "Tango"]). Include a mix of high-level and granular tags. Avoid location-specific or Buenos Aires-redundant tags.
 - emoji: A single emoji representing the event
 
 {note_section}
