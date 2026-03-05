@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 1: Map Swap & NYC Cleanup** - Repoint the map to Buenos Aires and remove all NYC-specific data
 - [x] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
 - [x] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
-- [ ] **Phase 4: JSON API Crawling** - Add lightweight HTTP-based crawling for sites with JSON/JSONP endpoints, starting with Alternativa Teatral
+- [x] **Phase 4: JSON API Crawling** - Add lightweight HTTP-based crawling for sites with JSON/JSONP endpoints, starting with Alternativa Teatral
 
 ## Phase Details
 
@@ -96,7 +96,7 @@ Plans:
 - Alternativa Teatral heavy JS/infinite scroll may limit basic HTML crawl effectiveness (hence this JSON API approach)
 
 Plans:
-- [ ] 04-01-PLAN.md -- Schema columns, db.py query update, crawl_json_api() function, main.py routing
+- [x] 04-01-PLAN.md -- Schema columns, db.py query update, crawl_json_api() function, main.py routing
 
 ## Progress
 
@@ -108,4 +108,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 1. Map Swap & NYC Cleanup | 2/2 | Complete | 2026-02-25 |
 | 2. Buenos Aires Locations | 1/1 | Complete | 2026-03-05 |
 | 3. Pipeline & Tags | 2/2 | Complete | 2026-03-05 |
-| 4. JSON API Crawling | 0/1 | Not started | - |
+| 4. JSON API Crawling | 1/1 | Complete | 2026-03-05 |
