@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** People can see what's happening and where in the Buenos Aires art scene, right now, on a map.
-**Current focus:** Phase 3 - Pipeline & Tags -- Plan 01 COMPLETE
+**Current focus:** Phase 4 - JSON API Crawling -- Complete
 
 ## Current Position
 
-Phase: 3 of 3 (Pipeline & Tags)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-03-05 -- Completed 03-01-PLAN.md (Pipeline Adaptation & BA Sources)
+Phase: 4 of 4 (JSON API Crawling)
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-03-05 -- Completed 04-01-PLAN.md
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 4
-- Average duration: 4min
-- Total execution time: 15min
+- Total plans completed: 5
+- Average duration: 5min
+- Total execution time: 22min
 
 **By Phase:**
 
@@ -30,9 +30,10 @@ Progress: [████████░░] 80%
 | 1. Map Swap & NYC Cleanup | 2/2 | 7min | 4min |
 | 2. Buenos Aires Locations | 1/1 | 3min | 3min |
 | 3. Pipeline & Tags | 1/2 | 5min | 5min |
+| 4. JSON API Crawling | 1/1 | 7min | 7min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 01-02 (5min), 02-01 (3min), 03-01 (5min)
+- Last 5 plans: 01-01 (2min), 01-02 (5min), 02-01 (3min), 03-01 (5min), 04-01 (7min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -56,18 +57,24 @@ Recent decisions affecting current work:
 - 03-01: 4 initial BA sources: Alternativa Teatral, Plateanet, Teatro El Picadero, Microteatro
 - 03-01: Alternativa Teatral complex API crawling deferred to future phase; basic HTML crawl for now
 - 03-01: Teatro El Picadero linked to Phase 2 location via website_locations FK
+- 04-01: httpx for async HTTP in crawler.py (lightweight, async-native, no browser overhead)
+- 04-01: Events with no dates pass through filter (let Gemini decide relevance)
+- 04-01: JSON API websites skip HAVING urls IS NOT NULL since API URL is in json_api_config
 
 ### Pending Todos
 
 None yet.
 
+### Roadmap Evolution
+
+- Phase 4 added: JSON API Crawling -- lightweight HTTP crawling for JSON/JSONP endpoints (Alternativa Teatral first)
+
 ### Blockers/Concerns
 
 - Plateanet may be geo-blocked from Indonesian server IPs -- may need proxy configuration
-- Alternativa Teatral heavy JS/infinite scroll may limit basic HTML crawl effectiveness
 
 ## Session Continuity
 
 Last session: 2026-03-05
-Stopped at: Completed 03-01-PLAN.md (Pipeline Adaptation & BA Sources)
+Stopped at: Completed 04-01-PLAN.md (JSON API Crawl Path)
 Resume file: None
