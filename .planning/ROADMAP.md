@@ -37,14 +37,14 @@ Plans:
 **Goal**: The app has a complete set of Buenos Aires cultural venues, galleries, and spaces with correct coordinates on the map
 **Depends on**: Phase 1
 **Requirements**: LOC-01, LOC-02, LOC-03
+**Plans:** 1 plan
 **Success Criteria** (what must be TRUE):
   1. Buenos Aires venues, galleries, and cultural spaces appear as locations in the database and JSON exports
   2. Clicking a location marker on the map shows it at the correct real-world position (geocoding is accurate)
   3. Location data uses the existing schema format -- no structural changes to the data model
-**Plans**: TBD
 
 Plans:
-- [ ] 02-01: BA venue data population and geocoding
+- [ ] 02-01-PLAN.md -- Update geocode.php for BA, create seed SQL files for ~40 venues across museums, cultural centers, galleries, and theaters
 
 ### Phase 3: Pipeline & Tags
 **Goal**: The data pipeline crawls Argentine event sources, extracts Spanish-language events via Gemini, and the tag system supports BA cultural categories -- making the app fully functional with live Buenos Aires data
