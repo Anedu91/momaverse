@@ -10,9 +10,9 @@ from datetime import datetime, timedelta
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Bounding box for the "init" set (NYC core area)
-INIT_LAT_RANGE = (40.672945, 40.735535)
-INIT_LNG_RANGE = (-73.998595, -73.943125)
+# Bounding box for the "init" set (Buenos Aires core area)
+INIT_LAT_RANGE = (-34.63, -34.57)
+INIT_LNG_RANGE = (-58.44, -58.36)
 
 
 def get_active_locations(events, all_locations):
@@ -33,7 +33,7 @@ def export_events(cursor):
     Export events from the events table to JSON files for the website.
 
     Creates:
-    - events.init.json (core NYC area, 7-day window)
+    - events.init.json (core Buenos Aires area, 7-day window)
     - events.full.json (extended area and time range)
     - locations.init.json (locations for init events)
     - locations.full.json (locations for full events)

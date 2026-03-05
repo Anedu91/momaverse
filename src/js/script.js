@@ -121,18 +121,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 '#a8d085', '#c88598', '#e09075', '#85a0d8', '#75c0b0', '#e89075',
                 '#9585e0', '#e0b085', '#8dc090', '#c88590', '#859098', '#a8b075'
             ],
-            MAP_INITIAL_VIEW: [40.70424, -73.97086],
-            MAP_INITIAL_ZOOM: 12,
+            MAP_INITIAL_VIEW: [-34.6083, -58.4000],
+            MAP_INITIAL_ZOOM: 13,
             MAP_USER_LOCATION_ZOOM: 14,
-            // NYC area bounds for geolocation validation
-            NYC_BOUNDS: {
-                latMin: 40.49,
-                latMax: 40.92,
-                lngMin: -74.26,
-                lngMax: -73.70
+            // Buenos Aires metro area bounds for geolocation validation
+            CITY_BOUNDS: {
+                latMin: -34.75,
+                latMax: -34.50,
+                lngMin: -58.60,
+                lngMax: -58.28
             },
-            MAP_STYLE_DARK: 'data/map-style-dark.json?v=7',
-            MAP_STYLE_LIGHT: 'data/map-style-light.json?v=7',
+            MAP_STYLE_DARK: 'data/map-style-dark.json?v=8',
+            MAP_STYLE_LIGHT: 'data/map-style-light.json?v=8',
             MAP_ATTRIBUTION: '© <a href="https://protomaps.com">Protomaps</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
             MAP_MAX_ZOOM: 20
         },
@@ -580,21 +580,21 @@ document.addEventListener('DOMContentLoaded', () => {
         },
 
         /**
-         * Check if coordinates are within NYC bounds
+         * Check if coordinates are within city bounds
          * @param {number} lat - Latitude
          * @param {number} lng - Longitude
-         * @returns {boolean} True if within NYC bounds
+         * @returns {boolean} True if within city bounds
          * @memberof App
          */
-        isWithinNYC(lat, lng) {
-            const bounds = this.config.NYC_BOUNDS;
+        isWithinCityBounds(lat, lng) {
+            const bounds = this.config.CITY_BOUNDS;
             return lat >= bounds.latMin && lat <= bounds.latMax &&
                    lng >= bounds.lngMin && lng <= bounds.lngMax;
         },
 
         /**
          * Get user's current location via Geolocation API
-         * Returns null if geolocation is unavailable, denied, or location is outside NYC
+         * Returns null if geolocation is unavailable, denied, or location is outside city bounds
          * @returns {Promise<{lat: number, lng: number}|null>}
          * @memberof App
          */
@@ -615,8 +615,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
 
-                // Only use location if within NYC area
-                if (this.isWithinNYC(lat, lng)) {
+                // Only use location if within city bounds
+                if (this.isWithinCityBounds(lat, lng)) {
                     return { lat, lng };
                 }
                 return null;
@@ -647,7 +647,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                     ModalManager.setLocationStatus('', '');
                 } else {
-                    // Location denied or outside NYC
+                    // Location denied or outside city bounds
                     ModalManager.setLocationStatus('Not available', '');
                 }
             } else {
@@ -671,7 +671,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 initialView = [urlParams.lat, urlParams.lng];
                 initialZoom = urlParams.zoom !== undefined ? urlParams.zoom : this.config.MAP_INITIAL_ZOOM;
             } else if (this.state.userLocation) {
-                // User location (if within NYC) takes second priority
+                // User location (if within city bounds) takes second priority
                 initialView = [this.state.userLocation.lat, this.state.userLocation.lng];
                 initialZoom = this.config.MAP_USER_LOCATION_ZOOM;
             } else {
@@ -690,6 +690,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 center: [initialView[1], initialView[0]], // MapLibre uses [lng, lat]
                 zoom: initialZoom,
                 maxZoom: this.config.MAP_MAX_ZOOM,
+                maxBounds: [
+                    [this.config.CITY_BOUNDS.lngMin, this.config.CITY_BOUNDS.latMin],
+                    [this.config.CITY_BOUNDS.lngMax, this.config.CITY_BOUNDS.latMax]
+                ],
                 attributionControl: false,
                 dragPan: false // Disable initially, re-enable without inertia below
             });

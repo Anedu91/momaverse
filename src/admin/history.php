@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit History - fomo.nyc Admin</title>
+    <title>Edit History - Momaverse Admin</title>
     <link rel="stylesheet" href="admin.css">
     <style>
         .history-container {

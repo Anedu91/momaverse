@@ -1,4 +1,4 @@
--- fomo.nyc Database Schema
+-- Momaverse Database Schema
 -- Event venues, websites, and events data
 
 -- Create database if not exists (for local development)
@@ -30,20 +30,6 @@ CREATE TABLE IF NOT EXISTS locations (
     INDEX idx_coords (lat, lng)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Location alternate names
-CREATE TABLE IF NOT EXISTS location_alternate_names (
-    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-    location_id INT UNSIGNED NOT NULL,
-    alternate_name VARCHAR(255) NOT NULL,
-    website_id INT UNSIGNED DEFAULT NULL COMMENT 'Scope to specific website (NULL = global)',
-
-    INDEX idx_location (location_id),
-    INDEX idx_alt_name (alternate_name),
-    INDEX idx_website_id (website_id),
-    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
-    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 -- ============================================================================
 -- WEBSITES
 -- ============================================================================
@@ -60,8 +46,10 @@ CREATE TABLE IF NOT EXISTS websites (
     js_code TEXT DEFAULT NULL COMMENT 'JavaScript code to execute before crawling',
     keywords VARCHAR(255) DEFAULT NULL COMMENT 'URL filter keywords',
     max_pages INT UNSIGNED DEFAULT 30 COMMENT 'Max pages for deep crawl',
+    max_batches INT UNSIGNED DEFAULT NULL COMMENT 'Max extraction batches for large crawls',
     notes TEXT DEFAULT NULL,
     disabled BOOLEAN DEFAULT FALSE COMMENT 'If true, skip this website during crawling',
+    source_type ENUM('primary', 'aggregator') DEFAULT 'primary' COMMENT 'primary=direct source, aggregator=lists events from other venues',
     crawl_after DATE DEFAULT NULL COMMENT 'Do not crawl until this date (for seasonal events)',
     force_crawl BOOLEAN DEFAULT FALSE COMMENT 'If true, crawl this website on next run regardless of frequency',
     last_crawled_at TIMESTAMP NULL COMMENT 'When this website was last crawled',
@@ -78,6 +66,7 @@ CREATE TABLE IF NOT EXISTS websites (
     scroll_delay DECIMAL(3,2) DEFAULT NULL COMMENT 'Seconds to pause between scroll steps (default: 0.2)',
     crawl_timeout INT UNSIGNED DEFAULT NULL COMMENT 'Timeout in seconds for entire crawl operation (default: 120)',
     crawl_frequency_locked BOOLEAN DEFAULT FALSE COMMENT 'If true, auto-frequency adjustment is disabled',
+    process_images TINYINT(1) DEFAULT NULL COMMENT 'Use vision model for image-based extraction',
 
     INDEX idx_name (name),
     INDEX idx_last_crawled (last_crawled_at),
@@ -107,6 +96,20 @@ CREATE TABLE IF NOT EXISTS website_locations (
     INDEX idx_location (location_id),
     FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE,
     FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Location alternate names (after websites table for FK reference)
+CREATE TABLE IF NOT EXISTS location_alternate_names (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    location_id INT UNSIGNED NOT NULL,
+    alternate_name VARCHAR(255) NOT NULL,
+    website_id INT UNSIGNED DEFAULT NULL COMMENT 'Scope to specific website (NULL = global)',
+
+    INDEX idx_location (location_id),
+    INDEX idx_alt_name (alternate_name),
+    INDEX idx_website_id (website_id),
+    FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE CASCADE,
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Website extra tags (tags to apply to all events from this website)
