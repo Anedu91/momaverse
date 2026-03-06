@@ -175,7 +175,7 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
 
     if not config:
         print(f"  Skipping {name}: no json_api_config")
-        return None
+        return None, None
 
     # Create safe filename and crawl result record
     safe_filename = create_safe_filename(name, '.md')
@@ -193,7 +193,7 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
         if not url:
             db.update_crawl_result_failed(cursor, connection, crawl_result_id, "No URL configured")
             db.update_website_last_crawled(cursor, connection, website['id'])
-            return None
+            return None, None
 
         print(f"  Crawling {name} via JSON API...")
         print(f"    - GET {url}")
@@ -210,6 +210,9 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
         if jsonp_callback:
             raw_text = strip_jsonp(raw_text, jsonp_callback)
 
+        # Strip BOM if present
+        raw_text = raw_text.lstrip('\ufeff')
+
         # Parse JSON
         data = json.loads(raw_text)
 
@@ -219,6 +222,9 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
             for key in data_path.split('.'):
                 if key and isinstance(data, dict):
                     data = data.get(key, {})
+
+        # Capture pre-filter data for location resolution
+        pre_filter_data = data
 
         total_events = len(data) if isinstance(data, dict) else 0
         print(f"    - Total events in API: {total_events}")
@@ -242,21 +248,21 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
                 cursor, connection, crawl_result_id, "No events after filtering"
             )
             db.update_website_last_crawled(cursor, connection, website['id'])
-            return None
+            return None, None
 
         # Store markdown (same as browser crawl path)
         db.update_crawl_result_crawled(cursor, connection, crawl_result_id, markdown)
         db.update_website_last_crawled(cursor, connection, website['id'])
 
         print(f"    - Stored {len(markdown)} chars of markdown ({filtered_count} events)")
-        return crawl_result_id
+        return crawl_result_id, pre_filter_data
 
     except Exception as e:
         error_msg = str(e)
         print(f"    - Error crawling {name}: {error_msg}")
         db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
         db.update_website_last_crawled(cursor, connection, website['id'])
-        return None
+        return None, None
 
 
 def resolve_url_templates(url):

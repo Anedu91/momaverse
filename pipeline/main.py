@@ -28,6 +28,7 @@ from crawl4ai import AsyncWebCrawler
 import db
 import crawler
 import extractor
+import location_resolver
 import processor
 import merger
 import exporter
@@ -146,8 +147,15 @@ async def run_pipeline(website_ids=None, limit=None):
                     continue
                 cur = conn.cursor(buffered=True)
                 try:
-                    result_id = await crawler.crawl_json_api(website, cur, conn, crawl_run_id)
+                    result_id, raw_data = await crawler.crawl_json_api(website, cur, conn, crawl_run_id)
                     if result_id:
+                        # Auto-create missing venues from structured API data
+                        if raw_data and isinstance(raw_data, dict):
+                            created = location_resolver.resolve_locations(
+                                raw_data, website['id'], cur, conn
+                            )
+                            if created > 0:
+                                print(f"    - Auto-created {created} new location(s)")
                         crawl_results.append((result_id, website))
                 except Exception as e:
                     print(f"    - Error crawling {website['name']}: {e}")
