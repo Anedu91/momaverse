@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-24)
 
 **Core value:** People can see what's happening and where in the Buenos Aires art scene, right now, on a map.
-**Current focus:** Phase 4 - JSON API Crawling -- Complete
+**Current focus:** Phase 5 - Auto-Location Creation -- Complete
 
 ## Current Position
 
-Phase: 4 of 4 (JSON API Crawling)
+Phase: 5 of 5 (Auto-Location Creation)
 Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-03-05 -- Completed 04-01-PLAN.md
+Last activity: 2026-03-06 -- Completed 05-01-PLAN.md
 
-Progress: [██████████] 100%
+Progress: [████████████] 100%
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 5
-- Average duration: 5min
-- Total execution time: 22min
+- Total plans completed: 6
+- Average duration: 4min
+- Total execution time: 25min
 
 **By Phase:**
 
@@ -31,9 +31,10 @@ Progress: [██████████] 100%
 | 2. Buenos Aires Locations | 1/1 | 3min | 3min |
 | 3. Pipeline & Tags | 1/2 | 5min | 5min |
 | 4. JSON API Crawling | 1/1 | 7min | 7min |
+| 5. Auto-Location Creation | 1/1 | 3min | 3min |
 
 **Recent Trend:**
-- Last 5 plans: 01-01 (2min), 01-02 (5min), 02-01 (3min), 03-01 (5min), 04-01 (7min)
+- Last 5 plans: 01-02 (5min), 02-01 (3min), 03-01 (5min), 04-01 (7min), 05-01 (3min)
 - Trend: stable
 
 *Updated after each plan completion*
@@ -60,6 +61,9 @@ Recent decisions affecting current work:
 - 04-01: httpx for async HTTP in crawler.py (lightweight, async-native, no browser overhead)
 - 04-01: Events with no dates pass through filter (let Gemini decide relevance)
 - 04-01: JSON API websites skip HAVING urls IS NOT NULL since API URL is in json_api_config
+- 05-01: Haversine 100m threshold for coordinate proximity dedup of auto-created venues
+- 05-01: Original UPPERCASE API venue name stored as website-scoped alternate name for processor matching
+- 05-01: Resolver processes pre-filter data (all API venues, not just date-filtered events)
 
 ### Pending Todos
 
@@ -68,6 +72,7 @@ None yet.
 ### Roadmap Evolution
 
 - Phase 4 added: JSON API Crawling -- lightweight HTTP crawling for JSON/JSONP endpoints (Alternativa Teatral first)
+- Phase 5 added: Auto-Location Creation -- auto-create missing venues from JSON API structured data during crawl, scoped to BA map bounds
 
 ### Blockers/Concerns
 
@@ -75,6 +80,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-05
-Stopped at: Completed 04-01-PLAN.md (JSON API Crawl Path)
+Last session: 2026-03-06
+Stopped at: Completed 05-01-PLAN.md (Auto-Location Creation)
 Resume file: None
