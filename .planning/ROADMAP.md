@@ -16,7 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
 - [x] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
 - [x] **Phase 4: JSON API Crawling** - Add lightweight HTTP-based crawling for sites with JSON/JSONP endpoints, starting with Alternativa Teatral
-- [ ] **Phase 5: Auto-Location Creation** - Auto-create missing venues from JSON API structured data (name, address, lat/lng) during crawl, scoped to Buenos Aires map bounds
+- [x] **Phase 5: Auto-Location Creation** - Auto-create missing venues from JSON API structured data (name, address, lat/lng) during crawl, scoped to Buenos Aires map bounds
 
 ## Phase Details
 
@@ -128,7 +128,7 @@ Plans:
 - Some venues may share addresses (multiple theaters in same building) — coordinate proximity threshold must be tuned
 
 Plans:
-- [ ] 05-01-PLAN.md -- Location resolver module, crawler return value change, main.py integration
+- [x] 05-01-PLAN.md -- Location resolver module, crawler return value change, main.py integration
 
 ## Progress
 
@@ -141,4 +141,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 | 2. Buenos Aires Locations | 1/1 | Complete | 2026-03-05 |
 | 3. Pipeline & Tags | 2/2 | Complete | 2026-03-05 |
 | 4. JSON API Crawling | 1/1 | Complete | 2026-03-05 |
-| 5. Auto-Location Creation | 0/1 | Not Started | - |
+| 5. Auto-Location Creation | 1/1 | Complete | 2026-03-06 |
