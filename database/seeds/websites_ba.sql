@@ -5,7 +5,7 @@
 USE fomo;
 
 -- ============================================================================
--- 1. ALTERNATIVA TEATRAL (aggregator)
+-- 1. ALTERNATIVA TEATRAL (primary)
 -- Biggest theater aggregator in Buenos Aires
 -- NOTE: Heavy JS / infinite scroll. Basic HTML crawl may extract partial data.
 --       Has a JSON API endpoint but response too large for token limits.
@@ -19,7 +19,7 @@ VALUES (
     'https://www.alternativateatral.com',
     3,
     'Events are in Spanish. Dates may use DD/MM/YYYY format. Heavy JavaScript with infinite scroll. Basic HTML crawl may only extract partial event listings. JSON API endpoint exists but response is too large for token limits -- complex API crawling deferred to future phase.',
-    'aggregator',
+    'primary',
     FALSE
 );
 
@@ -32,7 +32,7 @@ INSERT INTO website_tags (website_id, tag) VALUES
 (@alternativa_id, 'Theater');
 
 -- ============================================================================
--- 2. PLATEANET (aggregator)
+-- 2. PLATEANET (primary)
 -- Ticketing/event platform
 -- NOTE: May experience geo-blocking from non-Argentine IPs.
 -- ============================================================================
@@ -44,7 +44,7 @@ VALUES (
     'https://www.plateanet.com',
     3,
     'Events are in Spanish. Dates may use DD/MM/YYYY format. May not work from non-Argentine IPs (potential geo-blocking from Indonesian server). If crawl fails, consider using a proxy or VPN.',
-    'aggregator',
+    'primary',
     FALSE
 );
 
