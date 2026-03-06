@@ -16,6 +16,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 - [x] **Phase 2: Buenos Aires Locations** - Populate venue/gallery/space data with correct geocoding
 - [x] **Phase 3: Pipeline & Tags** - Configure crawlers for BA sources, adapt extraction for Spanish, define BA tag taxonomy
 - [x] **Phase 4: JSON API Crawling** - Add lightweight HTTP-based crawling for sites with JSON/JSONP endpoints, starting with Alternativa Teatral
+- [ ] **Phase 5: Auto-Location Creation** - Auto-create missing venues from JSON API structured data (name, address, lat/lng) during crawl, scoped to Buenos Aires map bounds
 
 ## Phase Details
 
@@ -98,10 +99,41 @@ Plans:
 Plans:
 - [x] 04-01-PLAN.md -- Schema columns, db.py query update, crawl_json_api() function, main.py routing
 
+### Phase 5: Auto-Location Creation
+**Goal**: When processing events from JSON API sources, auto-create missing venues as locations using structured venue data (name, address, lat/lng) from the API response, so events appear on the map without manual location setup.
+**Depends on**: Phase 4
+**Plans:** 1 plan
+
+**Context:**
+- Alternativa Teatral API provides per-venue: nombre, direccion, zona, lat, lng — no geocoding needed
+- Currently 53 unmatched venues from Alternativa Teatral alone; other Argentine aggregator sites will have the same pattern
+- JSON API sources only (structured data with coordinates); browser-crawled sites out of scope
+- Venues must fall within Buenos Aires map bounds (lat: -34.75 to -34.50, lng: -58.60 to -58.28)
+
+**Implementation:**
+- New module: `location_resolver.py` — extracts unique venues from JSON API response, checks for duplicates, creates missing locations
+- Dedup strategy: normalized name match → coordinate proximity (~100m) → alternate name match
+- Runs after crawl, before Gemini extraction — venues created from structured data, not AI output
+- Inserts into `locations` table (name, address, lat, lng) and optionally `location_alternate_names` scoped to website
+
+**Success Criteria** (what must be TRUE):
+  1. Venues from JSON API responses are auto-created in the locations table with correct name, address, and coordinates
+  2. Duplicate venues are detected by name match or coordinate proximity — no duplicates created
+  3. Venues outside Buenos Aires map bounds are skipped (not created)
+  4. After auto-creation, the existing processor `get_location_id()` matches events to the new locations
+  5. Alternativa Teatral events appear on the map with correct positions
+
+**Blockers/Concerns:**
+- Venue name normalization (uppercase from API vs title case in DB) needs consistent handling
+- Some venues may share addresses (multiple theaters in same building) — coordinate proximity threshold must be tuned
+
+Plans:
+- [ ] 05-01-PLAN.md -- Location resolver module, crawler return value change, main.py integration
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 -> 2 -> 3 -> 4
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
@@ -109,3 +141,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4
 | 2. Buenos Aires Locations | 1/1 | Complete | 2026-03-05 |
 | 3. Pipeline & Tags | 2/2 | Complete | 2026-03-05 |
 | 4. JSON API Crawling | 1/1 | Complete | 2026-03-05 |
+| 5. Auto-Location Creation | 0/1 | Not Started | - |
