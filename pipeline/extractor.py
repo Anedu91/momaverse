@@ -30,7 +30,7 @@ load_dotenv()
 try:
     from google import genai
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "120"))
     if GEMINI_API_KEY:
         genai_client = genai.Client(api_key=GEMINI_API_KEY)
