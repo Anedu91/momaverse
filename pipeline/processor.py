@@ -143,7 +143,7 @@ def create_short_name(name):
     short_name = re.sub(r'\s+with\s+.*$', '', short_name, flags=re.IGNORECASE)
     short_name = re.sub(r'\s+at\s+.*$', '', short_name, flags=re.IGNORECASE)
     short_name = re.sub(r'\s*@.*$', '', short_name)
-    short_name = re.sub(r'\s+in\s+NYC\s*[-–].*$', '', short_name)
+    short_name = re.sub(r'\s+in\s+\w+\s*[-–].*$', '', short_name)
 
     # Remove date patterns
     short_name = re.sub(r'\s*[-–]\s*(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s+.*$', '', short_name)
@@ -215,10 +215,6 @@ def process_tags(row_dict, tag_rules, extra_tags=None):
         final_tag = re.sub(r'\b(\d+)\s+D\b', r'\1D', final_tag)
         final_tag = re.sub(r'(\d+)(St|Nd|Rd|Th)\b', lambda m: m.group(1) + m.group(2).lower(), final_tag)
         final_tag = re.sub(r'\b([A-Z])&([a-z])\b', lambda m: m.group(1) + '&' + m.group(2).upper(), final_tag)
-
-        # Remove NYC prefix/suffix
-        final_tag = re.sub(r'^NYC\s+', '', final_tag, flags=re.IGNORECASE)
-        final_tag = re.sub(r'\s+NYC$', '', final_tag, flags=re.IGNORECASE)
 
         final_tag_lookup = final_tag.lower().replace(" ", "")
         if final_tag_lookup not in exclude_list and final_tag_lookup not in seen_tags:
@@ -427,7 +423,7 @@ def _normalize_location_name(name):
     original_lower = name.lower()
     has_dash_before_borough = any(
         f'- {b}' in original_lower or f'_{b}' in original_lower
-        for b in ['queens', 'bronx', 'brooklyn', 'manhattan', 'staten island']
+        for b in []
     )
 
     normalized = re.sub(r'[^\w\s]', '', original_lower)
@@ -437,7 +433,7 @@ def _normalize_location_name(name):
     if len(normalized) > 15 and normalized.startswith('the '):
         normalized = normalized[4:]
 
-    suffixes = ['nyc', 'new york', 'brooklyn', 'manhattan', 'queens', 'bronx', 'staten island']
+    suffixes = []
     if normalized in suffixes:
         return ""
 

@@ -2,12 +2,12 @@
 <?php
 /**
  * Geocode venue names or addresses using Google Maps Geocoding API
- * Results are biased toward the NYC metro area by default.
+ * Results are biased toward Buenos Aires, Argentina by default.
  *
  * Usage:
- *   php scripts/geocode.php "Culture House"
- *   php scripts/geocode.php "The Bell House"
- *   php scripts/geocode.php --json "Village Vanguard"
+ *   php scripts/geocode.php "MALBA"
+ *   php scripts/geocode.php "Teatro Colon"
+ *   php scripts/geocode.php --json "Centro Cultural Kirchner"
  *   php scripts/geocode.php --batch venues.txt
  *
  * Environment:
@@ -39,7 +39,7 @@ $batch_mode = in_array('--batch', $argv) || in_array('-b', $argv);
 if ($show_help) {
     echo <<<HELP
 Geocode venue names or addresses using Google Maps Geocoding API
-Results are biased toward the NYC metro area by default.
+Results are biased toward Buenos Aires, Argentina by default.
 
 Usage:
   php scripts/geocode.php [options] <venue name or address>
@@ -55,22 +55,22 @@ Environment:
                          Can be set in .env file or exported.
 
 Examples:
-  php scripts/geocode.php "Culture House"
-  php scripts/geocode.php "The Bell House"
-  php scripts/geocode.php --json "Village Vanguard"
+  php scripts/geocode.php "MALBA"
+  php scripts/geocode.php "Teatro Colon"
+  php scripts/geocode.php --json "Centro Cultural Kirchner"
   php scripts/geocode.php --batch venues.txt
 
 Output (default):
-  Name: Culture House
-  Address: 958 6th Ave, New York, NY 10001, USA
-  Lat: 40.75031
-  Lng: -73.98720
+  Name: MALBA
+  Address: Av. Pres. Figueroa Alcorta 3415, C1425 CABA, Argentina
+  Lat: -34.57740
+  Lng: -58.40390
 
 Output (--json):
-  {"name":"Culture House","address":"958 6th Ave, New York, NY 10001, USA","lat":40.75031,"lng":-73.9872}
+  {"name":"MALBA","address":"Av. Pres. Figueroa Alcorta 3415, C1425 CABA, Argentina","lat":-34.5774,"lng":-58.4039}
 
-Note: The script automatically biases results toward NYC metro area.
-      Just provide a venue name - no need to add "New York" or addresses.
+Note: The script automatically biases results toward Buenos Aires.
+      Just provide a venue name - no need to add "Buenos Aires" or addresses.
 
 HELP;
     exit(0);
@@ -84,18 +84,19 @@ if (!$api_key) {
     exit(1);
 }
 
-// NYC metro area bounding box (SW corner to NE corner)
-// Covers NYC boroughs plus nearby NJ, Westchester, and Long Island
-define('NYC_BOUNDS', '40.4774,-74.2591|41.2919,-73.4809');
+// Buenos Aires bounding box (SW corner to NE corner)
+// Covers Ciudad Autonoma de Buenos Aires (CABA)
+define('BA_BOUNDS', '-34.75,-58.60|-34.50,-58.28');
 
 /**
- * Geocode a venue name or address, biased toward NYC metro area
+ * Geocode a venue name or address, biased toward Buenos Aires
  */
 function geocode_address($query, $api_key) {
     $url = 'https://maps.googleapis.com/maps/api/geocode/json?' . http_build_query([
         'address' => $query,
-        'bounds' => NYC_BOUNDS,  // Bias results toward NYC metro area
-        'region' => 'us',        // Prefer US results
+        'bounds' => BA_BOUNDS,         // Bias results toward Buenos Aires
+        'region' => 'ar',              // Prefer Argentine results
+        'components' => 'country:AR',  // Restrict to Argentina
         'key' => $api_key,
     ]);
 

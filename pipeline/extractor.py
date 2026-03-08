@@ -30,7 +30,7 @@ load_dotenv()
 try:
     from google import genai
     GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash-preview-05-20")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
     GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "120"))
     if GEMINI_API_KEY:
         genai_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -601,7 +601,7 @@ async def extract_chunk(chunk_content, current_date_string, notes):
     """
     note_section = f"\n\nIMPORTANT: {notes}" if notes else ""
 
-    prompt = f'''Today's date is {current_date_string}. Extract ALL events from this NYC events page content.
+    prompt = f'''Today's date is {current_date_string}. Extract ALL events from this Buenos Aires events page content.
 
 For each event provide: name, location (venue name), occurrences (array of start_date in YYYY-MM-DD, start_time, end_time), and url if available.
 {note_section}
@@ -731,7 +731,7 @@ NOTE: The above is ONLY for reference to maintain consistent naming. You MUST st
 
 """
 
-    return f'''Today's date is {current_date_string}. We are assembling a database of upcoming events in New York City. Currently, we are inspecting {name} ({url}).
+    return f'''Today's date is {current_date_string}. We are assembling a database of upcoming events in Buenos Aires, Argentina. Currently, we are inspecting {name} ({url}).
 {existing_events_section}
 Based on the website content below, extract all upcoming events. For each event, provide:
 - name: The event name
@@ -744,13 +744,14 @@ Based on the website content below, extract all upcoming events. For each event,
   - end_time: End time (optional)
 - description: 1-3 sentence description
 - url: Specific event URL if available
-- hashtags: 4-7 CamelCase tags (e.g., ["Comedy", "Music", "Outdoor", "LatinJazz"]). Include a mix of high-level and granular tags. Avoid location-specific or NYC-redundant tags.
+- hashtags: 4-7 CamelCase tags in Spanish (e.g., ["Comedia", "Música", "Teatro", "Tango"]). Include a mix of high-level and granular tags. Avoid location-specific or Buenos Aires-redundant tags.
 - emoji: A single emoji representing the event
 
 {note_section}
 Rules:
 - Extract ALL events from the page - do not skip or summarize
-- Only include events in the NYC area within the next 3 months
+- Only include events in the Buenos Aires area within the next 3 months
+- Dates on Argentine sites often use DD/MM/YYYY format and Spanish month names.
 - Ignore unrelated event sections ("Hot Events", "Similar events", etc.)
 - For recurring events, expand ALL individual dates into the occurrences array
 - If no events are found, return an empty events list

@@ -28,6 +28,7 @@ from crawl4ai import AsyncWebCrawler
 import db
 import crawler
 import extractor
+import location_resolver
 import processor
 import merger
 import exporter
@@ -112,8 +113,14 @@ async def run_pipeline(website_ids=None, limit=None):
             print("Pipeline completed (no work to do).")
             return True
 
+        # Split websites by crawl mode
+        json_api_websites = [w for w in websites if w.get('crawl_mode') == 'json_api']
+        browser_websites = [w for w in websites if w.get('crawl_mode', 'browser') == 'browser']
+
         for w in websites:
-            print(f"  - {w['name']} ({len(w['urls'])} URL(s))")
+            mode = w.get('crawl_mode', 'browser')
+            url_count = len(w.get('urls', []))
+            print(f"  - {w['name']} ({url_count} URL(s), mode={mode})")
 
         # Create crawl run
         run_date = datetime.now().date()
@@ -129,6 +136,33 @@ async def run_pipeline(website_ids=None, limit=None):
         # Number of concurrent workers for crawling and extraction
         num_workers = 6
 
+        crawl_results = []
+
+        # Crawl JSON API websites first (fast, no browser needed)
+        if json_api_websites:
+            print(f"\n  JSON API crawling ({len(json_api_websites)} site(s))...")
+            for website in json_api_websites:
+                conn = db.create_connection()
+                if not conn:
+                    continue
+                cur = conn.cursor(buffered=True)
+                try:
+                    result_id, raw_data = await crawler.crawl_json_api(website, cur, conn, crawl_run_id)
+                    if result_id:
+                        # Auto-create missing venues from structured API data
+                        if raw_data and isinstance(raw_data, dict):
+                            created = location_resolver.resolve_locations(
+                                raw_data, website['id'], cur, conn
+                            )
+                            if created > 0:
+                                print(f"    - Auto-created {created} new location(s)")
+                        crawl_results.append((result_id, website))
+                except Exception as e:
+                    print(f"    - Error crawling {website['name']}: {e}")
+                finally:
+                    cur.close()
+                    conn.close()
+
         # Group websites by browser settings (text_mode, light_mode, use_stealth)
         # These are browser-level settings, so websites with different settings
         # need separate browser instances
@@ -141,11 +175,9 @@ async def run_pipeline(website_ids=None, limit=None):
             )
 
         website_batches = {}
-        for website in websites:
+        for website in browser_websites:
             key = get_browser_key(website)
             website_batches.setdefault(key, []).append(website)
-
-        crawl_results = []
 
         for (text_mode, light_mode, use_stealth), batch_websites in website_batches.items():
             if len(website_batches) > 1:
