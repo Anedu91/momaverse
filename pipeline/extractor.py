@@ -329,9 +329,9 @@ For EACH event flyer/image, extract:
   - start_time: Time if shown (e.g., "6:00 PM")
   - end_date: End date if this is a multi-day event/exhibition
   - end_time: End time if shown
-- description: Brief description of the event based on what you see
+- description: Brief description of the event based on what you see. MUST be written in Spanish.
 - url: Leave as null unless shown in image
-- hashtags: 4-7 relevant CamelCase tags (e.g., ["Art", "Exhibition", "Contemporary"])
+- hashtags: 4-7 relevant CamelCase tags in Spanish (e.g., ["Arte", "Exposición", "Contemporáneo"])
 - emoji: A single emoji representing the event
 {note_section}
 Rules:
@@ -546,8 +546,8 @@ def get_enrichment_prompt(event_names, venue_name):
     names_list = "\n".join(f"- {name}" for name in event_names)
 
     return f'''For each event at {venue_name}, provide:
-- description: 1-3 sentence description of what the event is
-- hashtags: 4-7 CamelCase tags (e.g., Comedy, Music, Outdoor, LatinJazz)
+- description: 1-3 sentence description of what the event is. MUST be written in Spanish.
+- hashtags: 4-7 CamelCase tags in Spanish (e.g., Comedia, Música, AlAireLibre, JazzLatino)
 - emoji: Single emoji representing the event
 
 Events to enrich:
@@ -742,7 +742,7 @@ Based on the website content below, extract all upcoming events. For each event,
   - start_time: Time like "4:00 PM" (optional)
   - end_date: End date if different from start (optional)
   - end_time: End time (optional)
-- description: 1-3 sentence description
+- description: 1-3 sentence description. MUST be written in Spanish.
 - url: Specific event URL if available
 - hashtags: 4-7 CamelCase tags in Spanish (e.g., ["Comedia", "Música", "Teatro", "Tango"]). Include a mix of high-level and granular tags. Avoid location-specific or Buenos Aires-redundant tags.
 - emoji: A single emoji representing the event
