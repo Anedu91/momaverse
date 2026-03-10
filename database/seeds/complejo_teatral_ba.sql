@@ -2,8 +2,6 @@
 -- Source: https://complejoteatral.gob.ar
 -- 6 theaters, 1 website with 6 crawl URLs
 
-USE fomo;
-
 -- ============================================================================
 -- LOCATIONS (6 theaters)
 -- ============================================================================
@@ -20,15 +18,12 @@ INSERT INTO locations (name, short_name, very_short_name, address, description, 
 -- LOCATION ALTERNATE NAMES (sub-rooms within Teatro San Martín)
 -- ============================================================================
 
--- Get Teatro San Martín ID dynamically
-SET @tsm_id = (SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1);
-
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@tsm_id, 'Sala Martín Coronado'),
-(@tsm_id, 'Sala Cunill Cabanellas'),
-(@tsm_id, 'Sala Leopoldo Lugones'),
-(@tsm_id, 'FotoGalería Sara Facio'),
-(@tsm_id, 'Anfiteatro del Parque Centenario');
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1), 'Sala Martín Coronado'),
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1), 'Sala Cunill Cabanellas'),
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1), 'Sala Leopoldo Lugones'),
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1), 'FotoGalería Sara Facio'),
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1), 'Anfiteatro del Parque Centenario');
 
 -- ============================================================================
 -- WEBSITE
@@ -47,31 +42,30 @@ INSERT INTO websites (
     'ver',     -- URL filter: show detail pages follow /ver/{slug}
     30,        -- max pages
     'primary',
-    1,         -- javascript_enabled (SPA site)
+    TRUE,      -- javascript_enabled (SPA site)
     5,         -- delay_before_return_html (seconds)
-    1          -- scan_full_page
+    TRUE       -- scan_full_page
 );
-
-SET @ctba_id = LAST_INSERT_ID();
 
 -- ============================================================================
 -- WEBSITE URLS (one per theater programming page)
 -- ============================================================================
 
 INSERT INTO website_urls (website_id, url, sort_order) VALUES
-(@ctba_id, 'https://complejoteatral.gob.ar/teatro-san-martin', 1),
-(@ctba_id, 'https://complejoteatral.gob.ar/teatro-presidente-alvear', 2),
-(@ctba_id, 'https://complejoteatral.gob.ar/teatro-regio', 3),
-(@ctba_id, 'https://complejoteatral.gob.ar/teatro-de-la-ribera', 4),
-(@ctba_id, 'https://complejoteatral.gob.ar/teatro-sarmiento', 5),
-(@ctba_id, 'https://complejoteatral.gob.ar/cine-teatro-el-plata', 6);
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/teatro-san-martin', 1),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/teatro-presidente-alvear', 2),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/teatro-regio', 3),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/teatro-de-la-ribera', 4),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/teatro-sarmiento', 5),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'https://complejoteatral.gob.ar/cine-teatro-el-plata', 6);
 
 -- ============================================================================
 -- WEBSITE <-> LOCATION LINKS
 -- ============================================================================
 
 INSERT INTO website_locations (website_id, location_id)
-SELECT @ctba_id, id FROM locations
+SELECT (SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), id
+FROM locations
 WHERE name IN (
     'Teatro San Martín',
     'Teatro Presidente Alvear',
@@ -87,11 +81,11 @@ AND address LIKE '%CABA%';
 -- ============================================================================
 
 INSERT INTO website_tags (website_id, tag) VALUES
-(@ctba_id, 'teatro'),
-(@ctba_id, 'danza'),
-(@ctba_id, 'música'),
-(@ctba_id, 'cine'),
-(@ctba_id, 'gobierno');
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'teatro'),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'danza'),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'música'),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'cine'),
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1), 'gobierno');
 
 -- ============================================================================
 -- INSTAGRAM
@@ -100,10 +94,12 @@ INSERT INTO website_tags (website_id, tag) VALUES
 INSERT INTO instagram_accounts (handle, name, description) VALUES
 ('complejoteatralba', 'Complejo Teatral de Buenos Aires', 'Cuenta oficial del CTBA');
 
-SET @ig_id = LAST_INSERT_ID();
-
 -- Link Instagram to website
-INSERT INTO website_instagram (website_id, instagram_id) VALUES (@ctba_id, @ig_id);
+INSERT INTO website_instagram (website_id, instagram_id) VALUES
+((SELECT id FROM websites WHERE name = 'Complejo Teatral de Buenos Aires' LIMIT 1),
+ (SELECT id FROM instagram_accounts WHERE handle = 'complejoteatralba' LIMIT 1));
 
 -- Link Instagram to main theater (Teatro San Martín)
-INSERT INTO location_instagram (location_id, instagram_id) VALUES (@tsm_id, @ig_id);
+INSERT INTO location_instagram (location_id, instagram_id) VALUES
+((SELECT id FROM locations WHERE name = 'Teatro San Martín' AND address LIKE '%Corrientes 1530%' LIMIT 1),
+ (SELECT id FROM instagram_accounts WHERE handle = 'complejoteatralba' LIMIT 1));

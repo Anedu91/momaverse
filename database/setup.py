@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Database Setup Script for fomo.nyc
+Database Setup Script for Momaverse
 
 Creates the database schema. Run this once when initially setting up the project.
 For existing data, restore from a backup instead (see README.md).
@@ -18,36 +18,40 @@ import sys
 from pathlib import Path
 
 try:
-    import mysql.connector
-    from mysql.connector import Error
+    import psycopg2
+    from psycopg2 import Error
 except ImportError:
-    print("Error: mysql-connector-python is required.")
-    print("Install it with: pip install mysql-connector-python")
+    print("Error: psycopg2 is required.")
+    print("Install it with: pip install psycopg2-binary")
     sys.exit(1)
 
 
-# Configuration - matches src/api/config.php
+# Configuration
 DB_CONFIG = {
     'local': {
         'host': 'localhost',
-        'database': 'fomo',
-        'user': 'root',
+        'database': 'momaverse',
+        'user': os.environ.get('USER', 'postgres'),
         'password': ''
     },
     'production': {
         'host': 'localhost',
-        'database': 'fomoowsq_fomo',
-        'user': 'fomoowsq_root',
-        'password': 'REDACTED_DB_PASSWORD'
+        'database': 'momaverse',
+        'user': 'momaverse',
+        'password': os.environ.get('DB_PASSWORD', '')
     }
 }
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
-SCHEMA_FILE = SCRIPT_DIR / 'schema.sql'
+SCHEMA_FILE = SCRIPT_DIR / 'schema_postgres.sql'
 
 # Tables in order for dropping (respects foreign keys)
 ALL_TABLES = [
+    # Sync & history
+    'conflicts',
+    'sync_state',
+    'edits',
     # Crawl data (must be dropped before events)
     'event_sources',
     'crawl_event_tags',
@@ -61,38 +65,53 @@ ALL_TABLES = [
     'event_urls',
     'event_occurrences',
     'events',
+    # Instagram
+    'website_instagram',
+    'location_instagram',
+    'instagram_accounts',
     # Websites and locations
+    'website_tags',
     'website_locations',
     'website_urls',
     'websites',
     'location_alternate_names',
     'locations',
-    'tags'
+    'tags',
+    # Other
+    'tag_rules',
+    'feedback',
+    'users',
+    'grantees',
+]
+
+# Enum types to drop
+ALL_TYPES = [
+    'source_type', 'crawl_mode', 'crawl_run_status', 'crawl_result_status',
+    'tag_rule_type', 'edit_action', 'edit_source', 'sync_source', 'conflict_status',
 ]
 
 
 def get_db_config():
     """Get database config based on environment."""
-    env = os.environ.get('FOMO_ENV', 'local')
+    env = os.environ.get('MOMAVERSE_ENV', 'local')
     if env not in DB_CONFIG:
         print(f"Warning: Unknown environment '{env}', using 'local'")
         env = 'local'
     return DB_CONFIG[env]
 
 
-def create_connection(with_database=True):
+def create_connection(database=None):
     """Create database connection."""
     config = get_db_config()
     conn_params = {
         'host': config['host'],
         'user': config['user'],
-        'password': config['password']
+        'password': config['password'],
+        'database': database or config['database']
     }
-    if with_database:
-        conn_params['database'] = config['database']
 
     try:
-        connection = mysql.connector.connect(**conn_params)
+        connection = psycopg2.connect(**conn_params)
         return connection
     except Error as e:
         print(f"Error connecting to database: {e}")
@@ -102,17 +121,22 @@ def create_connection(with_database=True):
 def create_database():
     """Create database if it doesn't exist."""
     config = get_db_config()
-    connection = create_connection(with_database=False)
+    connection = create_connection(database='postgres')
     if not connection:
         return False
 
     try:
+        connection.autocommit = True
         cursor = connection.cursor()
         cursor.execute(
-            f"CREATE DATABASE IF NOT EXISTS {config['database']} "
-            "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            "SELECT 1 FROM pg_database WHERE datname = %s",
+            (config['database'],)
         )
-        print(f"Database '{config['database']}' ready.")
+        if not cursor.fetchone():
+            cursor.execute(f"CREATE DATABASE {config['database']}")
+            print(f"Database '{config['database']}' created.")
+        else:
+            print(f"Database '{config['database']}' already exists.")
         return True
     except Error as e:
         print(f"Error creating database: {e}")
@@ -123,65 +147,40 @@ def create_database():
 
 
 def drop_tables(connection):
-    """Drop all tables."""
+    """Drop all tables and enum types."""
     cursor = connection.cursor()
     try:
         for table in ALL_TABLES:
-            cursor.execute(f"DROP TABLE IF EXISTS {table}")
+            cursor.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
             print(f"  Dropped table: {table}")
+        for type_name in ALL_TYPES:
+            cursor.execute(f"DROP TYPE IF EXISTS {type_name} CASCADE")
+            print(f"  Dropped type: {type_name}")
         connection.commit()
         return True
     except Error as e:
         print(f"Error dropping tables: {e}")
+        connection.rollback()
         return False
     finally:
         cursor.close()
 
 
 def create_schema(connection):
-    """Create tables from schema.sql."""
+    """Create tables from schema_postgres.sql."""
     cursor = connection.cursor()
 
     try:
         with open(SCHEMA_FILE, 'r') as f:
             schema_sql = f.read()
 
-        # Remove SQL comments
-        lines = []
-        for line in schema_sql.split('\n'):
-            # Remove full-line comments
-            stripped = line.strip()
-            if stripped.startswith('--'):
-                continue
-            # Remove inline comments
-            if '--' in line:
-                line = line[:line.index('--')]
-            lines.append(line)
-        schema_sql = '\n'.join(lines)
-
-        # Split by semicolons and execute each statement
-        statements = schema_sql.split(';')
-        for statement in statements:
-            statement = statement.strip()
-            if not statement:
-                continue
-            if statement.upper().startswith('CREATE DATABASE'):
-                continue
-            if statement.upper().startswith('USE '):
-                continue
-
-            try:
-                cursor.execute(statement)
-            except Error as e:
-                # Ignore "table already exists" errors
-                if e.errno != 1050:
-                    print(f"Warning: {e}")
-
+        cursor.execute(schema_sql)
         connection.commit()
         print("Schema created successfully.")
         return True
     except Error as e:
         print(f"Error creating schema: {e}")
+        connection.rollback()
         return False
     finally:
         cursor.close()
@@ -207,7 +206,7 @@ def show_stats(connection):
                 count = cursor.fetchone()[0]
                 print(f"{label}: {count}")
             except Error:
-                pass  # Table might not exist
+                connection.rollback()
 
     except Error as e:
         print(f"Error getting stats: {e}")
@@ -216,12 +215,12 @@ def show_stats(connection):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Setup fomo.nyc database schema')
+    parser = argparse.ArgumentParser(description='Setup Momaverse database schema')
     parser.add_argument('--drop-tables', action='store_true',
                         help='Drop existing tables before creating (WARNING: deletes data)')
     args = parser.parse_args()
 
-    print("fomo.nyc Database Setup")
+    print("Momaverse Database Setup")
     print("=" * 40)
 
     # Create database if needed
@@ -249,8 +248,10 @@ def main():
         show_stats(connection)
 
         print("\nSetup complete!")
-        print("\nTo populate the database, restore from a backup:")
-        print("  mysql -u root fomo < database/backups/fomo_backup_YYYYMMDD.sql")
+        print("\nTo populate with seed data, run:")
+        print("  psql momaverse -f database/seeds/museos_ba.sql")
+        print("  psql momaverse -f database/seeds/teatros_ba.sql")
+        print("  # ... etc")
 
     finally:
         connection.close()

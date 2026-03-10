@@ -2,8 +2,6 @@
 -- Source: Major theaters in CABA not part of Complejo Teatral de Buenos Aires
 -- 10 theaters
 
-USE fomo;
-
 -- ============================================================================
 -- LOCATIONS (10 theaters)
 -- ============================================================================
@@ -24,20 +22,16 @@ INSERT INTO locations (name, short_name, very_short_name, address, description, 
 -- LOCATION ALTERNATE NAMES
 -- ============================================================================
 
-SET @colon_id = (SELECT id FROM locations WHERE name = 'Teatro Colon' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@colon_id, 'Teatro Colon de Buenos Aires'),
-(@colon_id, 'Colon');
+((SELECT id FROM locations WHERE name = 'Teatro Colon' LIMIT 1), 'Teatro Colon de Buenos Aires'),
+((SELECT id FROM locations WHERE name = 'Teatro Colon' LIMIT 1), 'Colon');
 
-SET @konex_id = (SELECT id FROM locations WHERE name = 'Ciudad Cultural Konex' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@konex_id, 'Konex'),
-(@konex_id, 'Ciudad Cultural Konex');
+((SELECT id FROM locations WHERE name = 'Ciudad Cultural Konex' LIMIT 1), 'Konex'),
+((SELECT id FROM locations WHERE name = 'Ciudad Cultural Konex' LIMIT 1), 'Ciudad Cultural Konex');
 
-SET @cervantes_id = (SELECT id FROM locations WHERE name = 'Teatro Nacional Cervantes' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@cervantes_id, 'Cervantes');
+((SELECT id FROM locations WHERE name = 'Teatro Nacional Cervantes' LIMIT 1), 'Cervantes');
 
-SET @metropolitan_id = (SELECT id FROM locations WHERE name = 'Teatro Metropolitan' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@metropolitan_id, 'Teatro Metropolitan Citi');
+((SELECT id FROM locations WHERE name = 'Teatro Metropolitan' LIMIT 1), 'Teatro Metropolitan Citi');

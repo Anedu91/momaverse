@@ -2,8 +2,6 @@
 -- Source: Major government and independent cultural centers in CABA
 -- 9 cultural centers
 
-USE fomo;
-
 -- ============================================================================
 -- LOCATIONS (9 cultural centers)
 -- ============================================================================
@@ -23,25 +21,20 @@ INSERT INTO locations (name, short_name, very_short_name, address, description, 
 -- LOCATION ALTERNATE NAMES
 -- ============================================================================
 
-SET @cck_id = (SELECT id FROM locations WHERE name = 'Centro Cultural Kirchner' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@cck_id, 'CCK'),
-(@cck_id, 'Kirchner Cultural Centre');
+((SELECT id FROM locations WHERE name = 'Centro Cultural Kirchner' LIMIT 1), 'CCK'),
+((SELECT id FROM locations WHERE name = 'Centro Cultural Kirchner' LIMIT 1), 'Kirchner Cultural Centre');
 
-SET @ccr_id = (SELECT id FROM locations WHERE name = 'Centro Cultural Recoleta' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@ccr_id, 'CCR'),
-(@ccr_id, 'Centro Cultural de la Recoleta');
+((SELECT id FROM locations WHERE name = 'Centro Cultural Recoleta' LIMIT 1), 'CCR'),
+((SELECT id FROM locations WHERE name = 'Centro Cultural Recoleta' LIMIT 1), 'Centro Cultural de la Recoleta');
 
-SET @ccsm_id = (SELECT id FROM locations WHERE name = 'Centro Cultural San Martin' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@ccsm_id, 'CCSM');
+((SELECT id FROM locations WHERE name = 'Centro Cultural San Martin' LIMIT 1), 'CCSM');
 
-SET @conti_id = (SELECT id FROM locations WHERE name = 'Centro Cultural de la Memoria Haroldo Conti' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@conti_id, 'Centro Cultural Conti'),
-(@conti_id, 'Conti');
+((SELECT id FROM locations WHERE name = 'Centro Cultural de la Memoria Haroldo Conti' LIMIT 1), 'Centro Cultural Conti'),
+((SELECT id FROM locations WHERE name = 'Centro Cultural de la Memoria Haroldo Conti' LIMIT 1), 'Conti');
 
-SET @palais_id = (SELECT id FROM locations WHERE name = 'Palais de Glace' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@palais_id, 'Palacio Nacional de las Artes');
+((SELECT id FROM locations WHERE name = 'Palais de Glace' LIMIT 1), 'Palacio Nacional de las Artes');

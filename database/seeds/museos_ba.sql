@@ -2,8 +2,6 @@
 -- Source: Major art museums in Ciudad Autonoma de Buenos Aires
 -- 9 museums
 
-USE fomo;
-
 -- ============================================================================
 -- LOCATIONS (9 museums)
 -- ============================================================================
@@ -23,19 +21,15 @@ INSERT INTO locations (name, short_name, very_short_name, address, description, 
 -- LOCATION ALTERNATE NAMES
 -- ============================================================================
 
-SET @malba_id = (SELECT id FROM locations WHERE name = 'Museo de Arte Latinoamericano de Buenos Aires' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@malba_id, 'MALBA');
+((SELECT id FROM locations WHERE name = 'Museo de Arte Latinoamericano de Buenos Aires' LIMIT 1), 'MALBA');
 
-SET @mnba_id = (SELECT id FROM locations WHERE name = 'Museo Nacional de Bellas Artes' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@mnba_id, 'MNBA');
+((SELECT id FROM locations WHERE name = 'Museo Nacional de Bellas Artes' LIMIT 1), 'MNBA');
 
-SET @macba_id = (SELECT id FROM locations WHERE name = 'Museo de Arte Contemporaneo de Buenos Aires' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@macba_id, 'MACBA');
+((SELECT id FROM locations WHERE name = 'Museo de Arte Contemporaneo de Buenos Aires' LIMIT 1), 'MACBA');
 
-SET @mamba_id = (SELECT id FROM locations WHERE name = 'Museo de Arte Moderno de Buenos Aires' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@mamba_id, 'MAMBA'),
-(@mamba_id, 'Moderno');
+((SELECT id FROM locations WHERE name = 'Museo de Arte Moderno de Buenos Aires' LIMIT 1), 'MAMBA'),
+((SELECT id FROM locations WHERE name = 'Museo de Arte Moderno de Buenos Aires' LIMIT 1), 'Moderno');
