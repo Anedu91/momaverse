@@ -2,8 +2,6 @@
 -- 4 Argentine event sources for pipeline crawling
 -- Sources: Alternativa Teatral, Plateanet, Teatro El Picadero, Microteatro
 
-USE fomo;
-
 -- ============================================================================
 -- 1. ALTERNATIVA TEATRAL (primary)
 -- Biggest theater aggregator in Buenos Aires
@@ -23,13 +21,11 @@ VALUES (
     FALSE
 );
 
-SET @alternativa_id = (SELECT id FROM websites WHERE name = 'Alternativa Teatral' LIMIT 1);
-
 INSERT INTO website_urls (website_id, url, sort_order) VALUES
-(@alternativa_id, 'https://www.alternativateatral.com/cartelera.asp', 1);
+((SELECT id FROM websites WHERE name = 'Alternativa Teatral' LIMIT 1), 'https://www.alternativateatral.com/cartelera.asp', 1);
 
 INSERT INTO website_tags (website_id, tag) VALUES
-(@alternativa_id, 'Theater');
+((SELECT id FROM websites WHERE name = 'Alternativa Teatral' LIMIT 1), 'Theater');
 
 -- ============================================================================
 -- 2. PLATEANET (primary)
@@ -48,18 +44,16 @@ VALUES (
     FALSE
 );
 
-SET @plateanet_id = (SELECT id FROM websites WHERE name = 'Plateanet' LIMIT 1);
-
 INSERT INTO website_urls (website_id, url, sort_order) VALUES
-(@plateanet_id, 'https://www.plateanet.com/', 1);
+((SELECT id FROM websites WHERE name = 'Plateanet' LIMIT 1), 'https://www.plateanet.com/', 1);
 
 INSERT INTO website_tags (website_id, tag) VALUES
-(@plateanet_id, 'Show');
+((SELECT id FROM websites WHERE name = 'Plateanet' LIMIT 1), 'Show');
 
 -- ============================================================================
 -- 3. TEATRO EL PICADERO (primary)
 -- Venue page with current shows
--- Links to Phase 2 location: "Teatro El Picadero" in teatros_ba.sql
+-- Links to location: "Teatro El Picadero" in teatros_ba.sql
 -- ============================================================================
 
 INSERT INTO websites (name, description, base_url, crawl_frequency, notes, source_type, disabled)
@@ -73,24 +67,22 @@ VALUES (
     FALSE
 );
 
-SET @picadero_web_id = (SELECT id FROM websites WHERE name = 'Teatro El Picadero' LIMIT 1);
-
 INSERT INTO website_urls (website_id, url, sort_order) VALUES
-(@picadero_web_id, 'https://www.teatropicadero.com.ar/obras', 1);
+((SELECT id FROM websites WHERE name = 'Teatro El Picadero' LIMIT 1), 'https://www.teatropicadero.com.ar/obras', 1);
 
--- Link to Phase 2 location
-SET @picadero_loc_id = (SELECT id FROM locations WHERE name = 'Teatro El Picadero' LIMIT 1);
+-- Link to location (only if it exists)
 INSERT INTO website_locations (website_id, location_id)
-SELECT @picadero_web_id, @picadero_loc_id
-FROM DUAL WHERE @picadero_loc_id IS NOT NULL;
+SELECT
+    (SELECT id FROM websites WHERE name = 'Teatro El Picadero' LIMIT 1),
+    id
+FROM locations WHERE name = 'Teatro El Picadero' LIMIT 1;
 
 INSERT INTO website_tags (website_id, tag) VALUES
-(@picadero_web_id, 'Theater');
+((SELECT id FROM websites WHERE name = 'Teatro El Picadero' LIMIT 1), 'Theater');
 
 -- ============================================================================
 -- 4. MICROTEATRO (primary)
 -- Venue with short-form theater
--- No matching Phase 2 location found in seeds
 -- ============================================================================
 
 INSERT INTO websites (name, description, base_url, crawl_frequency, notes, source_type, disabled)
@@ -104,13 +96,11 @@ VALUES (
     FALSE
 );
 
-SET @microteatro_id = (SELECT id FROM websites WHERE name = 'Microteatro Buenos Aires' LIMIT 1);
-
 INSERT INTO website_urls (website_id, url, sort_order) VALUES
-(@microteatro_id, 'https://www.microteatro.com.ar/', 1);
+((SELECT id FROM websites WHERE name = 'Microteatro Buenos Aires' LIMIT 1), 'https://www.microteatro.com.ar/', 1);
 
 INSERT INTO website_tags (website_id, tag) VALUES
-(@microteatro_id, 'Theater');
+((SELECT id FROM websites WHERE name = 'Microteatro Buenos Aires' LIMIT 1), 'Theater');
 
 -- ============================================================================
 -- Configure Alternativa Teatral for JSON API crawling
@@ -119,11 +109,5 @@ INSERT INTO website_tags (website_id, tag) VALUES
 
 UPDATE websites
 SET crawl_mode = 'json_api',
-    json_api_config = JSON_OBJECT(
-        'jsonp_callback', 'jsoncallback',
-        'data_path', 'espectaculos',
-        'fields_include', JSON_ARRAY('titulo', 'clasificaciones', 'lugares', 'url', 'url_entradas'),
-        'date_window_days', 30,
-        'base_url', 'https://www.alternativateatral.com/get-json.php?t=novedades&r=cartelera'
-    )
+    json_api_config = '{"jsonp_callback": "jsoncallback", "data_path": "espectaculos", "fields_include": ["titulo", "clasificaciones", "lugares", "url", "url_entradas"], "date_window_days": 30, "base_url": "https://www.alternativateatral.com/get-json.php?t=novedades&r=cartelera"}'::jsonb
 WHERE name = 'Alternativa Teatral';

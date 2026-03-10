@@ -2,8 +2,6 @@
 -- Source: Art galleries, foundations, and alternative spaces in CABA
 -- 12 galleries and art spaces
 
-USE fomo;
-
 -- ============================================================================
 -- LOCATIONS (12 galleries and art spaces)
 -- ============================================================================
@@ -26,16 +24,13 @@ INSERT INTO locations (name, short_name, very_short_name, address, description, 
 -- LOCATION ALTERNATE NAMES
 -- ============================================================================
 
-SET @fortabat_id = (SELECT id FROM locations WHERE name = 'Coleccion de Arte Amalia Lacroze de Fortabat' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@fortabat_id, 'Museo Fortabat'),
-(@fortabat_id, 'Coleccion Fortabat');
+((SELECT id FROM locations WHERE name = 'Coleccion de Arte Amalia Lacroze de Fortabat' LIMIT 1), 'Museo Fortabat'),
+((SELECT id FROM locations WHERE name = 'Coleccion de Arte Amalia Lacroze de Fortabat' LIMIT 1), 'Coleccion Fortabat');
 
-SET @proa_id = (SELECT id FROM locations WHERE name = 'Fundacion Proa' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@proa_id, 'Fundacion PROA'),
-(@proa_id, 'Proa');
+((SELECT id FROM locations WHERE name = 'Fundacion Proa' LIMIT 1), 'Fundacion PROA'),
+((SELECT id FROM locations WHERE name = 'Fundacion Proa' LIMIT 1), 'Proa');
 
-SET @benzacar_id = (SELECT id FROM locations WHERE name = 'Galeria Ruth Benzacar' LIMIT 1);
 INSERT INTO location_alternate_names (location_id, alternate_name) VALUES
-(@benzacar_id, 'Ruth Benzacar');
+((SELECT id FROM locations WHERE name = 'Galeria Ruth Benzacar' LIMIT 1), 'Ruth Benzacar');

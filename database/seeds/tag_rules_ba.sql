@@ -2,8 +2,6 @@
 -- English-to-Spanish rewrites and BA-redundant exclusions
 -- Tags display in Spanish for BA users
 
-USE fomo;
-
 -- ============================================================================
 -- REWRITE RULES (English -> Spanish)
 -- Gemini sometimes outputs English tags; normalize to Spanish
