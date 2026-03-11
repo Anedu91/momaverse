@@ -55,11 +55,11 @@ tag_rules             - Tag rewrite/exclude/remove rules
 ### Prerequisites
 
 - Python 3.8+
-- MariaDB/MySQL
+- PostgreSQL
 - Required packages:
   - `crawl4ai`
   - `google-generativeai`
-  - `mysql-connector-python`
+  - `psycopg2-binary`
   - `python-dotenv`
   - `regex`
 

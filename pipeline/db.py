@@ -12,11 +12,11 @@ import os
 import sys
 
 try:
-    import mysql.connector
-    from mysql.connector import Error
+    import psycopg2
+    from psycopg2 import Error
 except ImportError:
-    print("Error: mysql-connector-python is required.")
-    print("Install it with: pip install mysql-connector-python")
+    print("Error: psycopg2 is required.")
+    print("Install it with: pip install psycopg2-binary")
     sys.exit(1)
 
 
@@ -24,15 +24,15 @@ except ImportError:
 DB_CONFIG = {
     'local': {
         'host': 'localhost',
-        'database': 'fomo',
-        'user': 'root',
+        'dbname': 'momaverse',
+        'user': os.environ.get('USER', 'postgres'),
         'password': ''
     },
     'production': {
         'host': 'localhost',
-        'database': 'fomoowsq_fomo',
-        'user': 'fomoowsq_root',
-        'password': 'REDACTED_DB_PASSWORD'
+        'dbname': os.environ.get('PROD_DB_NAME', 'momaverse'),
+        'user': os.environ.get('PROD_DB_USER', 'momaverse'),
+        'password': os.environ.get('PROD_DB_PASS', '')
     }
 }
 
@@ -49,12 +49,14 @@ def create_connection():
     """Create database connection."""
     config = get_db_config()
     try:
-        return mysql.connector.connect(
+        conn = psycopg2.connect(
             host=config['host'],
-            database=config['database'],
+            dbname=config['dbname'],
             user=config['user'],
             password=config['password']
         )
+        conn.autocommit = False
+        return conn
     except Error as e:
         print(f"Error connecting to database: {e}")
         return None
@@ -96,12 +98,12 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
                    w.remove_overlay_elements, w.javascript_enabled, w.text_mode, w.light_mode,
                    w.use_stealth, w.scroll_delay, w.crawl_timeout, w.process_images, w.base_url,
                    w.crawl_mode, w.json_api_config,
-                   GROUP_CONCAT(CONCAT(wu.url, ':::', IFNULL(wu.js_code, '')) ORDER BY wu.sort_order SEPARATOR '|||') as urls
+                   STRING_AGG(CONCAT(wu.url, ':::', COALESCE(wu.js_code, '')) , '|||' ORDER BY wu.sort_order) as urls
             FROM websites w
             LEFT JOIN website_urls wu ON w.id = wu.website_id
             WHERE w.id IN ({placeholders})
             GROUP BY w.id
-            HAVING urls IS NOT NULL OR w.crawl_mode = 'json_api'
+            HAVING STRING_AGG(wu.url, '') IS NOT NULL OR w.crawl_mode = 'json_api'
             ORDER BY w.id ASC
         """, website_ids)
     else:
@@ -112,17 +114,17 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
                    w.remove_overlay_elements, w.javascript_enabled, w.text_mode, w.light_mode,
                    w.use_stealth, w.scroll_delay, w.crawl_timeout, w.process_images, w.base_url,
                    w.crawl_mode, w.json_api_config,
-                   GROUP_CONCAT(CONCAT(wu.url, ':::', IFNULL(wu.js_code, '')) ORDER BY wu.sort_order SEPARATOR '|||') as urls
+                   STRING_AGG(CONCAT(wu.url, ':::', COALESCE(wu.js_code, '')), '|||' ORDER BY wu.sort_order) as urls
             FROM websites w
             LEFT JOIN website_urls wu ON w.id = wu.website_id
             WHERE w.disabled = FALSE
-              AND (w.crawl_after IS NULL OR w.crawl_after <= CURDATE())
+              AND (w.crawl_after IS NULL OR w.crawl_after <= CURRENT_DATE)
               AND (w.force_crawl = TRUE
                    OR w.last_crawled_at IS NULL
-                   OR DATEDIFF(NOW(), w.last_crawled_at) >= COALESCE(w.crawl_frequency, 7))
+                   OR EXTRACT(DAY FROM NOW() - w.last_crawled_at) >= COALESCE(w.crawl_frequency, 7))
             GROUP BY w.id
-            HAVING urls IS NOT NULL OR w.crawl_mode = 'json_api'
-            ORDER BY w.force_crawl DESC, w.last_crawled_at ASC
+            HAVING STRING_AGG(wu.url, '') IS NOT NULL OR w.crawl_mode = 'json_api'
+            ORDER BY w.force_crawl DESC, w.last_crawled_at ASC NULLS LAST
         """)
 
     websites = []
@@ -150,7 +152,7 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
             'process_images': row[19],
             'base_url': row[20],
             'crawl_mode': row[21] or 'browser',
-            'json_api_config': json.loads(row[22]) if row[22] else {},
+            'json_api_config': row[22] if isinstance(row[22], dict) else (json.loads(row[22]) if row[22] else {}),
             'urls': _parse_url_data(row[23]) if row[23] else []
         }
         websites.append(website)
@@ -166,11 +168,12 @@ def get_or_create_crawl_run(cursor, connection, run_date):
         return result[0]
 
     cursor.execute(
-        "INSERT INTO crawl_runs (run_date, status, started_at) VALUES (%s, 'running', NOW())",
+        "INSERT INTO crawl_runs (run_date, status, started_at) VALUES (%s, 'running', NOW()) RETURNING id",
         (run_date,)
     )
+    new_id = cursor.fetchone()[0]
     connection.commit()
-    return cursor.lastrowid
+    return new_id
 
 
 def create_crawl_result(cursor, connection, crawl_run_id, website_id, filename):
@@ -178,16 +181,13 @@ def create_crawl_result(cursor, connection, crawl_run_id, website_id, filename):
     cursor.execute(
         """INSERT INTO crawl_results (crawl_run_id, website_id, filename, status, created_at)
            VALUES (%s, %s, %s, 'pending', NOW())
-           ON DUPLICATE KEY UPDATE status = 'pending'""",
+           ON CONFLICT (crawl_run_id, filename) DO UPDATE SET status = 'pending'
+           RETURNING id""",
         (crawl_run_id, website_id, filename)
     )
+    new_id = cursor.fetchone()[0]
     connection.commit()
-
-    cursor.execute(
-        "SELECT id FROM crawl_results WHERE crawl_run_id = %s AND filename = %s",
-        (crawl_run_id, filename)
-    )
-    return cursor.fetchone()[0]
+    return new_id
 
 
 def update_crawl_result(cursor, connection, crawl_result_id, status, **kwargs):
@@ -345,17 +345,18 @@ def get_existing_upcoming_events(cursor, website_id):
         SELECT
             e.id, e.name, e.description,
             l.name as location, e.sublocation,
-            GROUP_CONCAT(
-                JSON_OBJECT(
+            STRING_AGG(
+                json_build_object(
                     'start_date', eo.start_date,
                     'start_time', eo.start_time,
                     'end_date', eo.end_date,
                     'end_time', eo.end_time
-                )
+                )::text,
+                ','
                 ORDER BY eo.start_date
             ) as occurrences_json,
-            GROUP_CONCAT(DISTINCT eu.url ORDER BY eu.sort_order) as urls,
-            GROUP_CONCAT(DISTINCT t.name ORDER BY t.name) as tags,
+            STRING_AGG(DISTINCT eu.url, ',' ORDER BY eu.url) as urls,
+            STRING_AGG(DISTINCT t.name, ',' ORDER BY t.name) as tags,
             e.emoji
         FROM events e
         LEFT JOIN locations l ON e.location_id = l.id
@@ -365,7 +366,7 @@ def get_existing_upcoming_events(cursor, website_id):
         LEFT JOIN tags t ON et.tag_id = t.id
         WHERE e.website_id = %s
           AND e.archived = FALSE
-          AND eo.start_date >= CURDATE()
+          AND eo.start_date >= CURRENT_DATE
         GROUP BY e.id, e.name, e.description, l.name, e.sublocation, e.emoji
         ORDER BY MIN(eo.start_date)
     """, (website_id,))
@@ -458,7 +459,7 @@ def archive_outdated_events(cursor, connection, website_id):
               -- No future occurrences: archive immediately (past events)
               NOT EXISTS (
                   SELECT 1 FROM event_occurrences eo
-                  WHERE eo.event_id = e.id AND eo.start_date >= CURDATE()
+                  WHERE eo.event_id = e.id AND eo.start_date >= CURRENT_DATE
               )
               OR
               -- Has future occurrences: only archive after 14-day grace period
@@ -469,7 +470,7 @@ def archive_outdated_events(cursor, connection, website_id):
                   JOIN crawl_events ce ON es.crawl_event_id = ce.id
                   JOIN crawl_results cr ON ce.crawl_result_id = cr.id
                   WHERE es.event_id = e.id
-                    AND cr.processed_at >= DATE_SUB(NOW(), INTERVAL 14 DAY)
+                    AND cr.processed_at >= NOW() - INTERVAL '14 days'
               )
           )
     """
@@ -480,7 +481,7 @@ def archive_outdated_events(cursor, connection, website_id):
                (SELECT MIN(eo.start_date)
                 FROM event_occurrences eo
                 WHERE eo.event_id = e.id
-                  AND eo.start_date >= CURDATE()) as next_occurrence
+                  AND eo.start_date >= CURRENT_DATE) as next_occurrence
         FROM events e
         WHERE {archive_where}
     """, (website_id,))

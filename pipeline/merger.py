@@ -591,6 +591,7 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                 INSERT INTO events (name, short_name, description, emoji, location_id, location_name,
                                    sublocation, website_id)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
             """, (
                 name[:500],
                 short_name[:255] if short_name else None,
@@ -601,7 +602,7 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                 sublocation[:255] if sublocation else None,
                 website_id
             ))
-            new_event_id = cursor.lastrowid
+            new_event_id = cursor.fetchone()[0]
 
             # Log the insert for sync tracking
             if edit_logger:
@@ -619,8 +620,9 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
             # Add occurrences
             for i, occ in enumerate(valid_occurrences):
                 cursor.execute("""
-                    INSERT IGNORE INTO event_occurrences (event_id, start_date, start_time, end_date, end_time, sort_order)
+                    INSERT INTO event_occurrences (event_id, start_date, start_time, end_date, end_time, sort_order)
                     VALUES (%s, %s, %s, %s, %s, %s)
+                    ON CONFLICT DO NOTHING
                 """, (new_event_id, occ[0], occ[1], occ[2], occ[3], i))
 
             # Add URL
@@ -639,12 +641,12 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                     if tag_row:
                         tag_id = tag_row[0]
                     else:
-                        cursor.execute("INSERT INTO tags (name) VALUES (%s)", (tag[:100],))
-                        tag_id = cursor.lastrowid
+                        cursor.execute("INSERT INTO tags (name) VALUES (%s) RETURNING id", (tag[:100],))
+                        tag_id = cursor.fetchone()[0]
 
                     # Link tag to event
                     cursor.execute(
-                        "INSERT IGNORE INTO event_tags (event_id, tag_id) VALUES (%s, %s)",
+                        "INSERT INTO event_tags (event_id, tag_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
                         (new_event_id, tag_id)
                     )
 

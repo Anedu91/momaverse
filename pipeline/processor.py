@@ -944,7 +944,8 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
             """INSERT INTO crawl_events
                (crawl_result_id, name, short_name, description, emoji,
                 location_name, sublocation, location_id, url, raw_data)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+               RETURNING id""",
             (
                 crawl_result_id,
                 event_data.get('name', '')[:500],
@@ -958,7 +959,7 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                 json.dumps(event_data)
             )
         )
-        crawl_event_id = cursor.lastrowid
+        crawl_event_id = cursor.fetchone()[0]
 
         # Insert occurrences
         for i, occ in enumerate(event_data.get('occurrences', [])):

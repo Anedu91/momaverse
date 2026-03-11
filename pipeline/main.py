@@ -56,7 +56,7 @@ async def run_pipeline(website_ids=None, limit=None):
         print("Failed to connect to database")
         return False
 
-    cursor = connection.cursor(buffered=True)
+    cursor = connection.cursor()
 
     try:
         # Check for incomplete crawl results first
@@ -145,7 +145,7 @@ async def run_pipeline(website_ids=None, limit=None):
                 conn = db.create_connection()
                 if not conn:
                     continue
-                cur = conn.cursor(buffered=True)
+                cur = conn.cursor()
                 try:
                     result_id, raw_data = await crawler.crawl_json_api(website, cur, conn, crawl_run_id)
                     if result_id:
@@ -207,7 +207,7 @@ async def run_pipeline(website_ids=None, limit=None):
                         if not conn:
                             queue.task_done()
                             continue
-                        cur = conn.cursor(buffered=True)
+                        cur = conn.cursor()
                         try:
                             result_id = await crawler.crawl_website(
                                 web_crawler, website, cur, conn, crawl_run_id
@@ -287,7 +287,7 @@ async def run_pipeline(website_ids=None, limit=None):
                     if not conn:
                         extract_queue.task_done()
                         continue
-                    cur = conn.cursor(buffered=True)
+                    cur = conn.cursor()
                     try:
                         success = await extractor.extract_events(
                             cur, conn, item['crawl_result_id'],
@@ -334,7 +334,7 @@ async def run_pipeline(website_ids=None, limit=None):
         if not connection:
             print("Failed to reconnect to database")
             return False
-        cursor = connection.cursor(buffered=True)
+        cursor = connection.cursor()
 
         total_events = 0
 
