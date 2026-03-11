@@ -5,6 +5,7 @@
     "build": "node build.js"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "esbuild": "^0.25.0"
   },
   "dependencies": {
