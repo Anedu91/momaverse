@@ -57,16 +57,15 @@ $websites = $websites->fetchAll(PDO::FETCH_ASSOC);
 // Get upcoming events at this location (non-archived)
 $events = $pdo->prepare("
     SELECT e.id, e.name, e.archived,
-           GROUP_CONCAT(
-               CONCAT(eo.start_date, '|', COALESCE(eo.start_time, ''))
-               ORDER BY eo.start_date, eo.start_time
-               SEPARATOR ';;'
+           STRING_AGG(
+               eo.start_date || '|' || COALESCE(eo.start_time, ''),
+               ';;' ORDER BY eo.start_date, eo.start_time
            ) as occurrences
     FROM events e
     JOIN event_occurrences eo ON e.id = eo.event_id
     WHERE e.location_id = ?
-    AND e.archived = 0
-    AND eo.start_date >= CURDATE()
+    AND e.archived = FALSE
+    AND eo.start_date >= CURRENT_DATE
     GROUP BY e.id, e.name, e.archived
     ORDER BY MIN(eo.start_date), MIN(eo.start_time)
 ");
@@ -76,15 +75,14 @@ $events = $events->fetchAll(PDO::FETCH_ASSOC);
 // Get archived events at this location
 $archivedEvents = $pdo->prepare("
     SELECT e.id, e.name, e.archived,
-           GROUP_CONCAT(
-               CONCAT(eo.start_date, '|', COALESCE(eo.start_time, ''))
-               ORDER BY eo.start_date, eo.start_time
-               SEPARATOR ';;'
+           STRING_AGG(
+               eo.start_date || '|' || COALESCE(eo.start_time, ''),
+               ';;' ORDER BY eo.start_date, eo.start_time
            ) as occurrences
     FROM events e
     JOIN event_occurrences eo ON e.id = eo.event_id
     WHERE e.location_id = ?
-    AND e.archived = 1
+    AND e.archived = TRUE
     GROUP BY e.id, e.name, e.archived
     ORDER BY MIN(eo.start_date) DESC, MIN(eo.start_time) DESC
 ");

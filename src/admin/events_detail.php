@@ -71,8 +71,8 @@ $sources = $pdo->prepare("
         ce.name,
         ce.url,
         ce.emoji,
-        ceo.start_date,
-        ceo.start_time,
+        MIN(ceo.start_date) as start_date,
+        MIN(ceo.start_time) as start_time,
         es.is_primary,
         w.name as website_name,
         crun.run_date
@@ -83,7 +83,7 @@ $sources = $pdo->prepare("
     LEFT JOIN websites w ON cr.website_id = w.id
     LEFT JOIN crawl_event_occurrences ceo ON ce.id = ceo.crawl_event_id
     WHERE es.event_id = ?
-    GROUP BY ce.id
+    GROUP BY ce.id, ce.name, ce.url, ce.emoji, es.is_primary, w.name, crun.run_date
     ORDER BY es.is_primary DESC, crun.run_date DESC
 ");
 $sources->execute([$event_id]);

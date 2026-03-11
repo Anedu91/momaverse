@@ -29,7 +29,7 @@ session_start();
 
 try {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -168,14 +168,15 @@ function createWebsite(PDO $pdo, EditLogger $logger): void {
     $stmt = $pdo->prepare("
         INSERT INTO websites (name, base_url, crawl_frequency, selector, num_clicks, keywords, max_pages, notes, disabled)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
     ");
     $stmt->execute([
         $data['name'], $data['base_url'], $data['crawl_frequency'],
         $data['selector'], $data['num_clicks'], $data['keywords'],
-        $data['max_pages'], $data['notes'], $data['disabled'] ? 1 : 0
+        $data['max_pages'], $data['notes'], $data['disabled']
     ]);
 
-    $id = (int)$pdo->lastInsertId();
+    $id = (int)$stmt->fetchColumn();
     $logger->logInsert('websites', $id, $data);
 
     // Handle URLs
@@ -191,7 +192,7 @@ function createWebsite(PDO $pdo, EditLogger $logger): void {
 
     // Handle location links
     if (!empty($input['location_ids']) && is_array($input['location_ids'])) {
-        $stmtLoc = $pdo->prepare("INSERT IGNORE INTO website_locations (website_id, location_id) VALUES (?, ?)");
+        $stmtLoc = $pdo->prepare("INSERT INTO website_locations (website_id, location_id) VALUES (?, ?) ON CONFLICT DO NOTHING");
         foreach ($input['location_ids'] as $locId) {
             $stmtLoc->execute([$id, (int)$locId]);
         }
@@ -199,7 +200,7 @@ function createWebsite(PDO $pdo, EditLogger $logger): void {
 
     // Handle tags
     if (!empty($input['tags']) && is_array($input['tags'])) {
-        $stmtTag = $pdo->prepare("INSERT IGNORE INTO website_tags (website_id, tag) VALUES (?, ?)");
+        $stmtTag = $pdo->prepare("INSERT INTO website_tags (website_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING");
         foreach ($input['tags'] as $tag) {
             $tag = trim($tag);
             if (!empty($tag)) {
@@ -248,7 +249,7 @@ function updateWebsite(PDO $pdo, EditLogger $logger, int $id): void {
 
     if (array_key_exists('disabled', $input)) {
         $updates[] = "disabled = ?";
-        $params[] = (bool)$input['disabled'] ? 1 : 0;
+        $params[] = (bool)$input['disabled'];
     }
 
     if (!empty($updates)) {
@@ -280,7 +281,7 @@ function updateWebsite(PDO $pdo, EditLogger $logger, int $id): void {
     if (array_key_exists('location_ids', $input)) {
         $pdo->prepare("DELETE FROM website_locations WHERE website_id = ?")->execute([$id]);
         if (!empty($input['location_ids']) && is_array($input['location_ids'])) {
-            $stmtLoc = $pdo->prepare("INSERT IGNORE INTO website_locations (website_id, location_id) VALUES (?, ?)");
+            $stmtLoc = $pdo->prepare("INSERT INTO website_locations (website_id, location_id) VALUES (?, ?) ON CONFLICT DO NOTHING");
             foreach ($input['location_ids'] as $locId) {
                 $stmtLoc->execute([$id, (int)$locId]);
             }
@@ -291,7 +292,7 @@ function updateWebsite(PDO $pdo, EditLogger $logger, int $id): void {
     if (array_key_exists('tags', $input)) {
         $pdo->prepare("DELETE FROM website_tags WHERE website_id = ?")->execute([$id]);
         if (!empty($input['tags']) && is_array($input['tags'])) {
-            $stmtTag = $pdo->prepare("INSERT IGNORE INTO website_tags (website_id, tag) VALUES (?, ?)");
+            $stmtTag = $pdo->prepare("INSERT INTO website_tags (website_id, tag) VALUES (?, ?) ON CONFLICT DO NOTHING");
             foreach ($input['tags'] as $tag) {
                 $tag = trim($tag);
                 if (!empty($tag)) {

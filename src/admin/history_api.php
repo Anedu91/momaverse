@@ -59,7 +59,7 @@ function getRecordHistory(PDO $pdo, string $tableName, int $recordId): void {
     // Get current record for context
     $currentRecord = null;
     try {
-        $stmt = $pdo->prepare("SELECT * FROM `$tableName` WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT * FROM $tableName WHERE id = ?");
         $stmt->execute([$recordId]);
         $currentRecord = $stmt->fetch(PDO::FETCH_ASSOC);
     } catch (Exception $e) {
@@ -195,7 +195,7 @@ function revertEdit(PDO $pdo): void {
             }
 
             // Get current value
-            $stmt = $pdo->prepare("SELECT `$fieldName` FROM `$tableName` WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT $fieldName FROM $tableName WHERE id = ?");
             $stmt->execute([$recordId]);
             $current = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -206,7 +206,7 @@ function revertEdit(PDO $pdo): void {
             $currentValue = $current[$fieldName];
 
             // Apply revert
-            $stmt = $pdo->prepare("UPDATE `$tableName` SET `$fieldName` = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName = ? WHERE id = ?");
             $stmt->execute([$oldValue, $recordId]);
 
             // Log the revert
@@ -218,13 +218,13 @@ function revertEdit(PDO $pdo): void {
 
         } elseif ($action === 'INSERT') {
             // Revert INSERT: delete the record
-            $stmt = $pdo->prepare("SELECT * FROM `$tableName` WHERE id = ?");
+            $stmt = $pdo->prepare("SELECT * FROM $tableName WHERE id = ?");
             $stmt->execute([$recordId]);
             $record = $stmt->fetch(PDO::FETCH_ASSOC);
 
             if ($record) {
                 $logger->logDelete($tableName, $recordId, $record);
-                $pdo->prepare("DELETE FROM `$tableName` WHERE id = ?")->execute([$recordId]);
+                $pdo->prepare("DELETE FROM $tableName WHERE id = ?")->execute([$recordId]);
             }
         }
 
@@ -248,7 +248,7 @@ function getRecordName(PDO $pdo, string $table, int $id): ?string {
             return "#$id";
         }
 
-        $stmt = $pdo->prepare("SELECT `$nameField` FROM `$table` WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT $nameField FROM $table WHERE id = ?");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ? $row[$nameField] : "#$id (deleted)";

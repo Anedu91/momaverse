@@ -12,22 +12,22 @@ $isLocal = in_array($_SERVER['HTTP_HOST'] ?? '', ['localhost', '127.0.0.1'])
 if ($isLocal) {
     $config = [
         'host' => 'localhost',
-        'database' => 'fomo',
-        'user' => 'root',
+        'database' => 'momaverse',
+        'user' => getenv('USER') ?: 'postgres',
         'password' => ''
     ];
 } else {
     $config = [
         'host' => 'localhost',
-        'database' => 'fomoowsq_fomo',
-        'user' => 'fomoowsq_root',
-        'password' => 'REDACTED_DB_PASSWORD'
+        'database' => 'momaverse',
+        'user' => 'momaverse',
+        'password' => getenv('DB_PASSWORD') ?: ''
     ];
 }
 
 try {
     $pdo = new PDO(
-        "mysql:host={$config['host']};dbname={$config['database']};charset=utf8mb4",
+        "pgsql:host={$config['host']};dbname={$config['database']}",
         $config['user'],
         $config['password'],
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]

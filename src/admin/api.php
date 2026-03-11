@@ -69,7 +69,7 @@ function getWebsites($pdo) {
         SELECT
             w.id, w.name, w.crawl_frequency, w.disabled, w.last_crawled_at,
             (SELECT COUNT(*) FROM website_urls wu WHERE wu.website_id = w.id) as url_count,
-            (SELECT GROUP_CONCAT(l.name SEPARATOR ', ')
+            (SELECT STRING_AGG(l.name, ', ')
              FROM website_locations wl JOIN locations l ON wl.location_id = l.id
              WHERE wl.website_id = w.id) as locations,
             cr_latest.status as latest_crawl_status,
@@ -77,12 +77,12 @@ function getWebsites($pdo) {
             crun_latest.run_date as latest_run_date,
             (SELECT SUM(cr4.event_count) FROM crawl_results cr4
              JOIN crawl_runs crun4 ON cr4.crawl_run_id = crun4.id
-             WHERE cr4.website_id = w.id AND crun4.run_date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)) as events_7d,
+             WHERE cr4.website_id = w.id AND crun4.run_date >= CURRENT_DATE - INTERVAL '7 days') as events_7d,
             CASE
-                WHEN w.disabled = 1 THEN 'disabled'
+                WHEN w.disabled = TRUE THEN 'disabled'
                 WHEN w.last_crawled_at IS NULL THEN 'never'
                 WHEN cr_latest.status = 'failed' THEN 'failed'
-                WHEN DATEDIFF(NOW(), w.last_crawled_at) > COALESCE(w.crawl_frequency, 7) THEN 'due'
+                WHEN EXTRACT(DAY FROM NOW() - w.last_crawled_at) > COALESCE(w.crawl_frequency, 7) THEN 'due'
                 ELSE 'ok'
             END as crawl_status
         FROM websites w
@@ -113,16 +113,16 @@ function getWebsiteFilters($pdo) {
     $stats = $pdo->query("
         SELECT
             COUNT(*) as total,
-            SUM(CASE WHEN disabled = 0 THEN 1 ELSE 0 END) as active,
-            SUM(CASE WHEN disabled = 0 AND last_crawled_at IS NOT NULL AND DATEDIFF(NOW(), last_crawled_at) <= COALESCE(crawl_frequency, 7) THEN 1 ELSE 0 END) as ok,
-            SUM(CASE WHEN disabled = 0 AND (last_crawled_at IS NULL OR DATEDIFF(NOW(), last_crawled_at) > COALESCE(crawl_frequency, 7)) THEN 1 ELSE 0 END) as due
+            SUM(CASE WHEN disabled = FALSE THEN 1 ELSE 0 END) as active,
+            SUM(CASE WHEN disabled = FALSE AND last_crawled_at IS NOT NULL AND EXTRACT(DAY FROM NOW() - last_crawled_at) <= COALESCE(crawl_frequency, 7) THEN 1 ELSE 0 END) as ok,
+            SUM(CASE WHEN disabled = FALSE AND (last_crawled_at IS NULL OR EXTRACT(DAY FROM NOW() - last_crawled_at) > COALESCE(crawl_frequency, 7)) THEN 1 ELSE 0 END) as due
         FROM websites
     ")->fetch(PDO::FETCH_ASSOC);
 
     $failed_count = $pdo->query("
         SELECT COUNT(DISTINCT w.id) FROM websites w
         JOIN crawl_results cr ON cr.website_id = w.id
-        WHERE w.disabled = 0 AND cr.status = 'failed'
+        WHERE w.disabled = FALSE AND cr.status = 'failed'
         AND cr.id = (SELECT cr2.id FROM crawl_results cr2 JOIN crawl_runs crun2 ON cr2.crawl_run_id = crun2.id WHERE cr2.website_id = w.id ORDER BY crun2.run_date DESC LIMIT 1)
     ")->fetchColumn();
 
@@ -148,8 +148,8 @@ function getLocations($pdo) {
             (SELECT COUNT(DISTINCT e.id) FROM events e WHERE e.location_id = l.id) as event_count,
             (SELECT COUNT(DISTINCT e.id) FROM events e
              JOIN event_occurrences eo ON e.id = eo.event_id
-             WHERE e.location_id = l.id AND eo.start_date >= CURDATE()
-             AND eo.start_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)) as events_7d
+             WHERE e.location_id = l.id AND eo.start_date >= CURRENT_DATE
+             AND eo.start_date <= CURRENT_DATE + INTERVAL '7 days') as events_7d
         FROM locations l
         ORDER BY l.name ASC
     ";
@@ -190,20 +190,24 @@ function getLocationFilters($pdo) {
 function getEvents($pdo) {
     $query = "
         SELECT
-            e.id, e.name, e.emoji, e.location_id, e.location_name as event_location_name,
-            e.website_id, e.archived, e.suppressed,
-            MIN(CASE WHEN eo.start_date >= CURDATE() THEN eo.start_date END) as next_date,
-            MIN(eo.start_date) as start_date,
-            (SELECT eo3.start_time FROM event_occurrences eo3 WHERE eo3.event_id = e.id AND eo3.start_date = MIN(CASE WHEN eo.start_date >= CURDATE() THEN eo.start_date END) LIMIT 1) as start_time,
-            w.name as website_name, l.name as location_name,
-            (SELECT GROUP_CONCAT(t.name SEPARATOR ', ') FROM event_tags et JOIN tags t ON et.tag_id = t.id WHERE et.event_id = e.id) as tags,
-            (SELECT COUNT(*) FROM event_occurrences eo2 WHERE eo2.event_id = e.id) as occurrence_count
-        FROM events e
-        LEFT JOIN event_occurrences eo ON e.id = eo.event_id
-        LEFT JOIN websites w ON e.website_id = w.id
-        LEFT JOIN locations l ON e.location_id = l.id
-        GROUP BY e.id, e.name, e.emoji, e.location_id, e.location_name, e.website_id, e.archived, e.suppressed, w.name, l.name
-        ORDER BY MIN(CASE WHEN eo.start_date >= CURDATE() THEN eo.start_date END) ASC, MIN(eo.start_date) ASC
+            sub.*,
+            (SELECT eo3.start_time FROM event_occurrences eo3 WHERE eo3.event_id = sub.id AND eo3.start_date = sub.next_date LIMIT 1) as start_time
+        FROM (
+            SELECT
+                e.id, e.name, e.emoji, e.location_id, e.location_name as event_location_name,
+                e.website_id, e.archived, e.suppressed,
+                MIN(CASE WHEN eo.start_date >= CURRENT_DATE THEN eo.start_date END) as next_date,
+                MIN(eo.start_date) as start_date,
+                w.name as website_name, l.name as location_name,
+                (SELECT STRING_AGG(t.name, ', ') FROM event_tags et JOIN tags t ON et.tag_id = t.id WHERE et.event_id = e.id) as tags,
+                (SELECT COUNT(*) FROM event_occurrences eo2 WHERE eo2.event_id = e.id) as occurrence_count
+            FROM events e
+            LEFT JOIN event_occurrences eo ON e.id = eo.event_id
+            LEFT JOIN websites w ON e.website_id = w.id
+            LEFT JOIN locations l ON e.location_id = l.id
+            GROUP BY e.id, e.name, e.emoji, e.location_id, e.location_name, e.website_id, e.archived, e.suppressed, w.name, l.name
+        ) sub
+        ORDER BY sub.next_date ASC NULLS LAST, sub.start_date ASC
     ";
 
     $rows = $pdo->query($query)->fetchAll(PDO::FETCH_ASSOC);
@@ -251,9 +255,9 @@ function getEventFilters($pdo) {
             (SELECT COUNT(*) FROM events WHERE archived = FALSE AND suppressed = FALSE) as total_active,
             (SELECT COUNT(*) FROM events WHERE archived = TRUE) as total_archived,
             (SELECT COUNT(*) FROM events WHERE suppressed = TRUE) as total_suppressed,
-            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date >= CURDATE()) as upcoming,
-            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date = CURDATE()) as today,
-            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 7 DAY)) as week
+            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date >= CURRENT_DATE) as upcoming,
+            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date = CURRENT_DATE) as today,
+            (SELECT COUNT(DISTINCT e.id) FROM events e JOIN event_occurrences eo ON e.id = eo.event_id WHERE e.archived = FALSE AND e.suppressed = FALSE AND eo.start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '7 days') as week
     ")->fetch(PDO::FETCH_ASSOC);
 
     return [
@@ -280,7 +284,7 @@ function getTags($pdo) {
             COUNT(DISTINCT e.website_id) as website_count,
             MIN(eo.start_date) as first_event,
             MAX(eo.start_date) as last_event,
-            COUNT(DISTINCT CASE WHEN eo.start_date >= CURDATE() THEN et.event_id END) as upcoming_count
+            COUNT(DISTINCT CASE WHEN eo.start_date >= CURRENT_DATE THEN et.event_id END) as upcoming_count
         FROM tags t
         JOIN event_tags et ON t.id = et.tag_id
         JOIN events e ON et.event_id = e.id
@@ -298,7 +302,7 @@ function getTags($pdo) {
     if (!empty($tag_ids)) {
         $placeholders = implode(',', array_fill(0, count($tag_ids), '?'));
         $loc_stmt = $pdo->prepare("
-            SELECT et.tag_id, GROUP_CONCAT(DISTINCT l.name ORDER BY l.name SEPARATOR ', ') as locations
+            SELECT et.tag_id, STRING_AGG(DISTINCT l.name, ', ' ORDER BY l.name) as locations
             FROM event_tags et
             JOIN events e ON et.event_id = e.id
             JOIN locations l ON e.location_id = l.id
@@ -326,7 +330,7 @@ function getTagFilters($pdo) {
             (SELECT COUNT(*) FROM tags t WHERE EXISTS (SELECT 1 FROM event_tags et WHERE et.tag_id = t.id)) as total_tags,
             (SELECT COUNT(*) FROM event_tags) as total_uses,
             (SELECT COUNT(DISTINCT et.tag_id) FROM event_tags et
-             WHERE EXISTS (SELECT 1 FROM event_occurrences eo WHERE eo.event_id = et.event_id AND eo.start_date >= CURDATE())) as active_tags
+             WHERE EXISTS (SELECT 1 FROM event_occurrences eo WHERE eo.event_id = et.event_id AND eo.start_date >= CURRENT_DATE)) as active_tags
     ")->fetch(PDO::FETCH_ASSOC);
 
     return [
@@ -353,7 +357,7 @@ $response = [
 
 // Get tab counts for header
 $response['counts'] = [
-    'websites' => (int)$pdo->query("SELECT COUNT(*) FROM websites WHERE disabled = 0")->fetchColumn(),
+    'websites' => (int)$pdo->query("SELECT COUNT(*) FROM websites WHERE disabled = FALSE")->fetchColumn(),
     'locations' => (int)$pdo->query("SELECT COUNT(*) FROM locations")->fetchColumn(),
     'events' => (int)$pdo->query("SELECT COUNT(*) FROM events")->fetchColumn(),
     'tags' => (int)$pdo->query("SELECT COUNT(*) FROM tags t WHERE EXISTS (SELECT 1 FROM event_tags et WHERE et.tag_id = t.id)")->fetchColumn(),

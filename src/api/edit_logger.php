@@ -114,6 +114,7 @@ class EditLogger {
                 old_value, new_value, source, user_id, editor_ip,
                 editor_user_agent, editor_info, applied_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
+            RETURNING id
         ");
 
         $stmt->execute([
@@ -131,7 +132,7 @@ class EditLogger {
             $this->editorInfo
         ]);
 
-        return (int)$this->pdo->lastInsertId();
+        return (int)$stmt->fetchColumn();
     }
 
     /**
@@ -324,9 +325,11 @@ class EditLogger {
         $stmt = $this->pdo->prepare("
             INSERT INTO sync_state (source, last_synced_edit_id, last_sync_at)
             VALUES (?, ?, NOW())
-            ON DUPLICATE KEY UPDATE last_synced_edit_id = ?, last_sync_at = NOW()
+            ON CONFLICT (source) DO UPDATE SET
+                last_synced_edit_id = EXCLUDED.last_synced_edit_id,
+                last_sync_at = EXCLUDED.last_sync_at
         ");
-        $stmt->execute([$source, $editId, $editId]);
+        $stmt->execute([$source, $editId]);
     }
 }
 
@@ -339,7 +342,7 @@ class EditLogger {
  */
 function getEditLogger(string $source = 'website', ?string $editorInfo = null): EditLogger {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]

@@ -32,7 +32,7 @@ session_start();
 // Database connection
 try {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -100,10 +100,11 @@ function handleRegister(PDO $pdo): void {
     $stmt = $pdo->prepare("
         INSERT INTO users (email, display_name, password_hash, created_at)
         VALUES (?, ?, ?, NOW())
+        RETURNING id
     ");
     $stmt->execute([$email, $displayName ?: null, $passwordHash]);
 
-    $userId = (int)$pdo->lastInsertId();
+    $userId = (int)$stmt->fetchColumn();
 
     // Auto-login after registration
     $_SESSION['user_id'] = $userId;

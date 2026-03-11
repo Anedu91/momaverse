@@ -15,7 +15,7 @@ if (!in_array($tab, $valid_tabs)) {
 
 // Get initial tab counts for header
 $counts = [
-    'websites' => $pdo->query("SELECT COUNT(*) FROM websites WHERE disabled = 0")->fetchColumn(),
+    'websites' => $pdo->query("SELECT COUNT(*) FROM websites WHERE disabled = FALSE")->fetchColumn(),
     'locations' => $pdo->query("SELECT COUNT(*) FROM locations")->fetchColumn(),
     'events' => $pdo->query("SELECT COUNT(*) FROM events")->fetchColumn(),
     'tags' => $pdo->query("SELECT COUNT(*) FROM tags t WHERE EXISTS (SELECT 1 FROM event_tags et WHERE et.tag_id = t.id)")->fetchColumn(),

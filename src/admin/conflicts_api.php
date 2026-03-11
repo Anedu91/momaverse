@@ -108,14 +108,14 @@ function getConflict(PDO $pdo, int $id): void {
     $fieldName = $conflict['field_name'];
 
     if ($fieldName) {
-        $stmt = $pdo->prepare("SELECT `$fieldName` FROM `$tableName` WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT $fieldName FROM $tableName WHERE id = ?");
         $stmt->execute([$recordId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         $conflict['current_value'] = $row ? $row[$fieldName] : null;
     }
 
     // Get the full record for context
-    $stmt = $pdo->prepare("SELECT * FROM `$tableName` WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM $tableName WHERE id = ?");
     $stmt->execute([$recordId]);
     $conflict['current_record'] = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -176,7 +176,7 @@ function resolveConflict(PDO $pdo): void {
     try {
         // Apply the resolution if it's not 'website' (website value is already current)
         if ($resolution !== 'website' && $fieldName) {
-            $stmt = $pdo->prepare("UPDATE `$tableName` SET `$fieldName` = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName = ? WHERE id = ?");
             $stmt->execute([$newValue, $recordId]);
         }
 
@@ -247,7 +247,7 @@ function batchResolve(PDO $pdo): void {
         try {
             // Apply resolution
             if ($resolution === 'local' && $fieldName) {
-                $stmt = $pdo->prepare("UPDATE `$tableName` SET `$fieldName` = ? WHERE id = ?");
+                $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName = ? WHERE id = ?");
                 $stmt->execute([$newValue, $recordId]);
             }
 
@@ -282,7 +282,7 @@ function getRecordName(PDO $pdo, string $table, int $id): ?string {
             return "#$id";
         }
 
-        $stmt = $pdo->prepare("SELECT `$nameField` FROM `$table` WHERE id = ?");
+        $stmt = $pdo->prepare("SELECT $nameField FROM $table WHERE id = ?");
         $stmt->execute([$id]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
         return $row ? $row[$nameField] : "#$id";

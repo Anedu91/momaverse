@@ -32,7 +32,7 @@ session_start();
 // Database connection
 try {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -203,6 +203,7 @@ function createLocation(PDO $pdo, EditLogger $logger): void {
     $stmt = $pdo->prepare("
         INSERT INTO locations (name, short_name, very_short_name, address, lat, lng, emoji, alt_emoji)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
     ");
     $stmt->execute([
         $data['name'],
@@ -215,7 +216,7 @@ function createLocation(PDO $pdo, EditLogger $logger): void {
         $data['alt_emoji']
     ]);
 
-    $id = (int)$pdo->lastInsertId();
+    $id = (int)$stmt->fetchColumn();
 
     // Log the insert
     $logger->logInsert('locations', $id, $data);
@@ -237,7 +238,7 @@ function createLocation(PDO $pdo, EditLogger $logger): void {
             $tagName = trim($tagName);
             if (!empty($tagName)) {
                 $tagId = getOrCreateTag($pdo, $tagName);
-                $pdo->prepare("INSERT IGNORE INTO location_tags (location_id, tag_id) VALUES (?, ?)")
+                $pdo->prepare("INSERT INTO location_tags (location_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
                     ->execute([$id, $tagId]);
             }
         }
@@ -352,7 +353,7 @@ function updateLocation(PDO $pdo, EditLogger $logger, int $id): void {
                 $tagName = trim($tagName);
                 if (!empty($tagName)) {
                     $tagId = getOrCreateTag($pdo, $tagName);
-                    $pdo->prepare("INSERT IGNORE INTO location_tags (location_id, tag_id) VALUES (?, ?)")
+                    $pdo->prepare("INSERT INTO location_tags (location_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
                         ->execute([$id, $tagId]);
                 }
             }
@@ -407,8 +408,9 @@ function getOrCreateTag(PDO $pdo, string $name): int {
         return (int)$row['id'];
     }
 
-    $pdo->prepare("INSERT INTO tags (name) VALUES (?)")->execute([$name]);
-    return (int)$pdo->lastInsertId();
+    $stmt = $pdo->prepare("INSERT INTO tags (name) VALUES (?) RETURNING id");
+    $stmt->execute([$name]);
+    return (int)$stmt->fetchColumn();
 }
 
 /**
