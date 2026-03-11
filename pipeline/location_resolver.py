@@ -159,10 +159,11 @@ def resolve_locations(raw_json_data, website_id, cursor, connection):
         # Insert new location
         cursor.execute(
             """INSERT INTO locations (name, address, lat, lng, emoji)
-               VALUES (%s, %s, %s, %s, %s)""",
+               VALUES (%s, %s, %s, %s, %s)
+               RETURNING id""",
             (display_name, address, lat, lng, '\U0001f3ad')
         )
-        new_location_id = cursor.lastrowid
+        new_location_id = cursor.fetchone()[0]
 
         # Insert website-scoped alternate name (original API name for processor matching)
         cursor.execute(

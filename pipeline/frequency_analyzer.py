@@ -68,15 +68,15 @@ def _compute_lead_times(cursor, website_id):
     Returns sorted list of lead time values in days (ascending).
     """
     cursor.execute("""
-        SELECT DATEDIFF(ceo.start_date, DATE(cr.crawled_at)) as lead_time_days
+        SELECT (ceo.start_date - cr.crawled_at::date) as lead_time_days
         FROM event_sources es
         JOIN crawl_events ce ON es.crawl_event_id = ce.id
         JOIN crawl_results cr ON ce.crawl_result_id = cr.id
         JOIN crawl_event_occurrences ceo ON ceo.crawl_event_id = ce.id
         WHERE es.is_primary = TRUE
           AND cr.website_id = %s
-          AND cr.crawled_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
-          AND ceo.start_date >= DATE(cr.crawled_at)
+          AND cr.crawled_at >= NOW() - (%s || ' days')::interval
+          AND ceo.start_date >= cr.crawled_at::date
         ORDER BY lead_time_days
     """, (website_id, ANALYSIS_WINDOW_DAYS))
 
@@ -94,16 +94,16 @@ def _compute_event_horizon(cursor, website_id):
     Returns sorted list of horizon values in days (ascending).
     """
     cursor.execute("""
-        SELECT MAX(DATEDIFF(ceo.start_date, DATE(cr.crawled_at))) as horizon_days
+        SELECT MAX(ceo.start_date - cr.crawled_at::date) as horizon_days
         FROM crawl_results cr
         JOIN crawl_events ce ON ce.crawl_result_id = cr.id
         JOIN crawl_event_occurrences ceo ON ceo.crawl_event_id = ce.id
         WHERE cr.website_id = %s
           AND cr.status = 'processed'
-          AND cr.crawled_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
-          AND ceo.start_date >= DATE(cr.crawled_at)
+          AND cr.crawled_at >= NOW() - (%s || ' days')::interval
+          AND ceo.start_date >= cr.crawled_at::date
         GROUP BY cr.id
-        HAVING horizon_days IS NOT NULL
+        HAVING MAX(ceo.start_date - cr.crawled_at::date) IS NOT NULL
         ORDER BY horizon_days
     """, (website_id, ANALYSIS_WINDOW_DAYS))
 
@@ -127,13 +127,13 @@ def _compute_new_event_rate(cursor, website_id):
         FROM crawl_results cr
         LEFT JOIN crawl_events ce ON ce.crawl_result_id = cr.id
         LEFT JOIN crawl_event_occurrences ceo ON ceo.crawl_event_id = ce.id
-            AND ceo.start_date BETWEEN DATE(cr.crawled_at)
-                AND DATE_ADD(DATE(cr.crawled_at), INTERVAL 14 DAY)
+            AND ceo.start_date BETWEEN cr.crawled_at::date
+                AND (cr.crawled_at::date + INTERVAL '14 days')
         LEFT JOIN event_sources es ON es.crawl_event_id = ce.id
         WHERE cr.website_id = %s
           AND cr.status = 'processed'
-          AND cr.crawled_at >= DATE_SUB(NOW(), INTERVAL %s DAY)
-        GROUP BY cr.id
+          AND cr.crawled_at >= NOW() - (%s || ' days')::interval
+        GROUP BY cr.id, cr.crawled_at, cr.event_count
         ORDER BY cr.crawled_at DESC
     """, (website_id, ANALYSIS_WINDOW_DAYS))
 
@@ -175,7 +175,7 @@ def _has_upcoming_events(cursor, website_id):
         JOIN event_occurrences eo ON e.id = eo.event_id
         WHERE e.website_id = %s
           AND e.archived = FALSE
-          AND eo.start_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 14 DAY)
+          AND eo.start_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '14 days'
     """, (website_id,))
     return cursor.fetchone()[0] > 0
 
@@ -318,7 +318,7 @@ def analyze_frequencies(cursor, connection, website_ids=None, dry_run=False, ver
                    (SELECT COUNT(*) FROM crawl_results cr
                     WHERE cr.website_id = w.id
                       AND cr.status = 'processed'
-                      AND cr.crawled_at >= DATE_SUB(NOW(), INTERVAL {ANALYSIS_WINDOW_DAYS} DAY)) as crawl_count
+                      AND cr.crawled_at >= NOW() - INTERVAL '{ANALYSIS_WINDOW_DAYS} days') as crawl_count
             FROM websites w
             WHERE w.disabled = FALSE
               AND w.id IN ({placeholders})
@@ -330,7 +330,7 @@ def analyze_frequencies(cursor, connection, website_ids=None, dry_run=False, ver
                    (SELECT COUNT(*) FROM crawl_results cr
                     WHERE cr.website_id = w.id
                       AND cr.status = 'processed'
-                      AND cr.crawled_at >= DATE_SUB(NOW(), INTERVAL {ANALYSIS_WINDOW_DAYS} DAY)) as crawl_count
+                      AND cr.crawled_at >= NOW() - INTERVAL '{ANALYSIS_WINDOW_DAYS} days') as crawl_count
             FROM websites w
             WHERE w.disabled = FALSE
             ORDER BY w.name
@@ -479,7 +479,7 @@ if __name__ == "__main__":
         print("Failed to connect to database")
         sys.exit(1)
 
-    cursor = connection.cursor(buffered=True)
+    cursor = connection.cursor()
 
     try:
         print(f"{'='*60}")
