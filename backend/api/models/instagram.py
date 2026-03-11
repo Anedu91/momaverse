@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,9 +14,9 @@ class InstagramAccount(TimestampMixin, Base):
     description: Mapped[str | None] = mapped_column(String(500))
 
     # Relationships (via M2M through tables)
-    locations: Mapped[list[Location]] = relationship(
+    locations: Mapped[list["Location"]] = relationship(
         secondary="location_instagram", back_populates="instagram_accounts"
     )
-    websites: Mapped[list[Website]] = relationship(
+    websites: Mapped[list["Website"]] = relationship(
         secondary="website_instagram", back_populates="instagram_accounts"
     )
