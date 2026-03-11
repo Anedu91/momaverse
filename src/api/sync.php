@@ -35,7 +35,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $providedKey !== $expectedSyncKey) 
 
 try {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -207,6 +207,7 @@ function checkForConflict(PDO $pdo, array $incomingEdit): ?array {
                 edit_uuid, table_name, record_id, field_name, action,
                 old_value, new_value, source, editor_info
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'local', 'synced')
+            RETURNING id
         ");
         $stmt2->execute([
             $incomingEdit['edit_uuid'],
@@ -217,7 +218,7 @@ function checkForConflict(PDO $pdo, array $incomingEdit): ?array {
             $incomingEdit['old_value'],
             $incomingEdit['new_value']
         ]);
-        $incomingEditId = $pdo->lastInsertId();
+        $incomingEditId = $stmt2->fetchColumn();
 
         $stmt->execute([
             $incomingEditId,
@@ -271,11 +272,11 @@ function applyEdit(PDO $pdo, array $edit): bool {
                 return false;
             }
 
-            $stmt = $pdo->prepare("UPDATE `$tableName` SET `$fieldName` = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE $tableName SET $fieldName = ? WHERE id = ?");
             $stmt->execute([$newValue, $recordId]);
 
         } elseif ($action === 'DELETE') {
-            $stmt = $pdo->prepare("DELETE FROM `$tableName` WHERE id = ?");
+            $stmt = $pdo->prepare("DELETE FROM $tableName WHERE id = ?");
             $stmt->execute([$recordId]);
 
         } elseif ($action === 'INSERT') {
@@ -289,7 +290,7 @@ function applyEdit(PDO $pdo, array $edit): bool {
                 edit_uuid, table_name, record_id, field_name, action,
                 old_value, new_value, source, editor_info, applied_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'local', 'synced', NOW())
-            ON DUPLICATE KEY UPDATE applied_at = NOW()
+            ON CONFLICT (edit_uuid) DO UPDATE SET applied_at = NOW()
         ");
         $stmt->execute([
             $edit['edit_uuid'],

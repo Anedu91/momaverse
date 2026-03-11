@@ -28,7 +28,7 @@ session_start();
 
 try {
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
@@ -79,7 +79,7 @@ function listEvents(PDO $pdo): void {
 
     // Filter by upcoming
     if (isset($_GET['upcoming']) && $_GET['upcoming']) {
-        $where[] = "EXISTS (SELECT 1 FROM event_occurrences eo WHERE eo.event_id = e.id AND eo.start_date >= CURDATE())";
+        $where[] = "EXISTS (SELECT 1 FROM event_occurrences eo WHERE eo.event_id = e.id AND eo.start_date >= CURRENT_DATE)";
     }
 
     // Filter by location
@@ -98,11 +98,11 @@ function listEvents(PDO $pdo): void {
 
     $sql = "
         SELECT e.id, e.name, e.short_name, e.emoji, e.location_id, e.location_name,
-               e.lat, e.lng, e.website_id, e.created_at, e.updated_at,
+               l.lat, l.lng, e.website_id, e.created_at, e.updated_at,
                l.name as location_display_name,
                w.name as website_name,
                (SELECT MIN(eo.start_date) FROM event_occurrences eo
-                WHERE eo.event_id = e.id AND eo.start_date >= CURDATE()) as next_date
+                WHERE eo.event_id = e.id AND eo.start_date >= CURRENT_DATE) as next_date
         FROM events e
         LEFT JOIN locations l ON e.location_id = l.id
         LEFT JOIN websites w ON e.website_id = w.id
@@ -131,7 +131,7 @@ function listEvents(PDO $pdo): void {
 
 function getEvent(PDO $pdo, int $id): void {
     $stmt = $pdo->prepare("
-        SELECT e.*, l.name as location_display_name, w.name as website_name
+        SELECT e.*, l.name as location_display_name, l.lat, l.lng, w.name as website_name
         FROM events e
         LEFT JOIN locations l ON e.location_id = l.id
         LEFT JOIN websites w ON e.website_id = w.id
@@ -147,8 +147,8 @@ function getEvent(PDO $pdo, int $id): void {
     $event['id'] = (int)$event['id'];
     $event['location_id'] = $event['location_id'] ? (int)$event['location_id'] : null;
     $event['website_id'] = $event['website_id'] ? (int)$event['website_id'] : null;
-    $event['lat'] = $event['lat'] ? (float)$event['lat'] : null;
-    $event['lng'] = $event['lng'] ? (float)$event['lng'] : null;
+    $event['lat'] = isset($event['lat']) && $event['lat'] ? (float)$event['lat'] : null;
+    $event['lng'] = isset($event['lng']) && $event['lng'] ? (float)$event['lng'] : null;
 
     // Get occurrences
     $stmt = $pdo->prepare("
@@ -202,42 +202,22 @@ function createEvent(PDO $pdo, EditLogger $logger): void {
         'location_id' => isset($input['location_id']) ? (int)$input['location_id'] : null,
         'location_name' => isset($input['location_name']) ? substr(trim($input['location_name']), 0, 255) : null,
         'sublocation' => isset($input['sublocation']) ? substr(trim($input['sublocation']), 0, 255) : null,
-        'lat' => isset($input['lat']) ? (float)$input['lat'] : null,
-        'lng' => isset($input['lng']) ? (float)$input['lng'] : null,
         'website_id' => isset($input['website_id']) ? (int)$input['website_id'] : null,
     ];
 
-    // Validate coordinates
-    if ($data['lat'] !== null && ($data['lat'] < -90 || $data['lat'] > 90)) {
-        jsonError('Invalid latitude', 400);
-    }
-    if ($data['lng'] !== null && ($data['lng'] < -180 || $data['lng'] > 180)) {
-        jsonError('Invalid longitude', 400);
-    }
-
-    // If location_id provided, copy coords from location
-    if ($data['location_id']) {
-        $stmt = $pdo->prepare("SELECT lat, lng FROM locations WHERE id = ?");
-        $stmt->execute([$data['location_id']]);
-        $loc = $stmt->fetch(PDO::FETCH_ASSOC);
-        if ($loc) {
-            $data['lat'] = $loc['lat'] ? (float)$loc['lat'] : $data['lat'];
-            $data['lng'] = $loc['lng'] ? (float)$loc['lng'] : $data['lng'];
-        }
-    }
-
     $stmt = $pdo->prepare("
         INSERT INTO events (name, short_name, description, emoji, location_id, location_name,
-                           sublocation, lat, lng, website_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           sublocation, website_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        RETURNING id
     ");
     $stmt->execute([
         $data['name'], $data['short_name'], $data['description'], $data['emoji'],
         $data['location_id'], $data['location_name'], $data['sublocation'],
-        $data['lat'], $data['lng'], $data['website_id']
+        $data['website_id']
     ]);
 
-    $id = (int)$pdo->lastInsertId();
+    $id = (int)$stmt->fetchColumn();
     $logger->logInsert('events', $id, $data);
 
     // Handle occurrences
@@ -276,7 +256,7 @@ function createEvent(PDO $pdo, EditLogger $logger): void {
             $tagName = trim($tagName);
             if (!empty($tagName)) {
                 $tagId = getOrCreateTag($pdo, $tagName);
-                $pdo->prepare("INSERT IGNORE INTO event_tags (event_id, tag_id) VALUES (?, ?)")
+                $pdo->prepare("INSERT INTO event_tags (event_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
                     ->execute([$id, $tagId]);
             }
         }
@@ -321,20 +301,6 @@ function updateEvent(PDO $pdo, EditLogger $logger, int $id): void {
             $updates[] = "$field = ?";
             $params[] = $input[$field] !== null ? (int)$input[$field] : null;
         }
-    }
-
-    if (array_key_exists('lat', $input)) {
-        $lat = $input['lat'] !== null ? (float)$input['lat'] : null;
-        if ($lat !== null && ($lat < -90 || $lat > 90)) jsonError('Invalid latitude', 400);
-        $updates[] = "lat = ?";
-        $params[] = $lat;
-    }
-
-    if (array_key_exists('lng', $input)) {
-        $lng = $input['lng'] !== null ? (float)$input['lng'] : null;
-        if ($lng !== null && ($lng < -180 || $lng > 180)) jsonError('Invalid longitude', 400);
-        $updates[] = "lng = ?";
-        $params[] = $lng;
     }
 
     if (!empty($updates)) {
@@ -392,7 +358,7 @@ function updateEvent(PDO $pdo, EditLogger $logger, int $id): void {
                 $tagName = trim($tagName);
                 if (!empty($tagName)) {
                     $tagId = getOrCreateTag($pdo, $tagName);
-                    $pdo->prepare("INSERT IGNORE INTO event_tags (event_id, tag_id) VALUES (?, ?)")
+                    $pdo->prepare("INSERT INTO event_tags (event_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
                         ->execute([$id, $tagId]);
                 }
             }
@@ -424,8 +390,9 @@ function getOrCreateTag(PDO $pdo, string $name): int {
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
     if ($row) return (int)$row['id'];
 
-    $pdo->prepare("INSERT INTO tags (name) VALUES (?)")->execute([$name]);
-    return (int)$pdo->lastInsertId();
+    $stmt = $pdo->prepare("INSERT INTO tags (name) VALUES (?) RETURNING id");
+    $stmt->execute([$name]);
+    return (int)$stmt->fetchColumn();
 }
 
 function getJsonInput(): array {

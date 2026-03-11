@@ -22,7 +22,7 @@ $stats = $pdo->prepare("
         COUNT(DISTINCT e.website_id) as website_count,
         MIN(eo.start_date) as first_event,
         MAX(eo.start_date) as last_event,
-        SUM(CASE WHEN eo.start_date >= CURDATE() THEN 1 ELSE 0 END) as upcoming_count
+        SUM(CASE WHEN eo.start_date >= CURRENT_DATE THEN 1 ELSE 0 END) as upcoming_count
     FROM tags t
     JOIN event_tags et ON t.id = et.tag_id
     JOIN events e ON et.event_id = e.id
@@ -91,7 +91,7 @@ $events = $pdo->prepare("
     LEFT JOIN event_occurrences eo ON e.id = eo.event_id
     LEFT JOIN locations l ON e.location_id = l.id
     WHERE t.name = ?
-    AND eo.start_date >= CURDATE()
+    AND eo.start_date >= CURRENT_DATE
     ORDER BY eo.start_date, eo.start_time
     LIMIT 15
 ");

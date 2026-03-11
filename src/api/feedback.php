@@ -2,7 +2,7 @@
 /**
  * Feedback API Endpoint
  *
- * Receives user feedback submissions and stores them in MySQL database.
+ * Receives user feedback submissions and stores them in the database.
  *
  * POST /api/feedback.php
  * Body: { "message": "User feedback text" }
@@ -70,7 +70,7 @@ $pageUrl = isset($data['page_url']) ? substr($data['page_url'], 0, 500) : null;
 try {
     // Connect to database
     $pdo = new PDO(
-        "mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4",
+        "pgsql:host=" . DB_HOST . ";dbname=" . DB_NAME,
         DB_USER,
         DB_PASS,
         [
