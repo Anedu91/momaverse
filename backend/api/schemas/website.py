@@ -16,11 +16,16 @@ __all__ = [
 
 
 class WebsiteCreate(BaseModel):
+    """Note: ``tags`` and ``location_ids`` are accepted here for convenience but
+    the ORM relationships are ``viewonly=True``.  The service layer must
+    manually create the join-table rows (``WebsiteTag`` / ``WebsiteLocation``)
+    when processing these fields."""
+
     name: Annotated[str, Field(max_length=255)]
     description: str | None = None
     base_url: Annotated[str | None, Field(max_length=500)] = None
     max_pages: int = 30
-    urls: list[str] = []
+    urls: list[Annotated[str, Field(max_length=2000)]] = []
     location_ids: list[int] = []
     tags: list[str] = []
 
@@ -40,10 +45,14 @@ class WebsiteUrlResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    url: str
+    url: Annotated[str, Field(max_length=2000)]
     sort_order: int = 0
 
 
+# Fields like crawl_frequency, selector, num_clicks, js_code, keywords,
+# max_batches, notes, source_type, etc. are intentionally excluded from
+# public schemas — they are admin/crawler internals and will be exposed
+# through a separate admin schema if needed.
 class WebsiteResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

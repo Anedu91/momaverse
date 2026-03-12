@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from api.models.base import EditAction, EditSource
 
@@ -14,7 +15,7 @@ class EditResponse(BaseModel):
     edit_uuid: str
     table_name: str
     record_id: int
-    field_name: str | None = None
+    field_name: Annotated[str | None, Field(max_length=100)] = None
     action: EditAction
     old_value: str | None = None
     new_value: str | None = None

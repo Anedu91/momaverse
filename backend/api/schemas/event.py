@@ -43,7 +43,7 @@ class EventCreate(BaseModel):
     location_name: Annotated[str | None, Field(max_length=255)] = None
     sublocation: Annotated[str | None, Field(max_length=255)] = None
     occurrences: list[OccurrenceSchema] = []
-    urls: list[str] = []
+    urls: list[Annotated[str, Field(max_length=2000)]] = []
     tags: list[str] = []
 
 
@@ -59,7 +59,7 @@ class EventUpdate(BaseModel):
     suppressed: bool | None = None
     reviewed: bool | None = None
     occurrences: list[OccurrenceSchema] | None = None
-    urls: list[str] | None = None
+    urls: list[Annotated[str, Field(max_length=2000)]] | None = None
     tags: list[str] | None = None
 
 
@@ -67,7 +67,7 @@ class EventUrlResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
-    url: str
+    url: Annotated[str, Field(max_length=2000)]
     sort_order: int = 0
 
 

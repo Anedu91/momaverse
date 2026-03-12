@@ -1,4 +1,5 @@
 from datetime import date
+from types import SimpleNamespace
 
 import pytest
 from pydantic import ValidationError
@@ -109,3 +110,67 @@ def test_detail_inherits_base_fields():
     assert resp.id == 1
     assert resp.name == "Test Event"
     assert resp.tags[0].name == "concert"
+
+
+# ---------------------------------------------------------------------------
+# URL max_length validation
+# ---------------------------------------------------------------------------
+
+
+def test_create_url_max_length():
+    with pytest.raises(ValidationError):
+        EventCreate(name="Show", urls=["https://example.com/" + "x" * 2000])
+
+
+def test_create_url_at_max_length():
+    url = "https://e.co/" + "x" * (2000 - len("https://e.co/"))
+    ev = EventCreate(name="Show", urls=[url])
+    assert len(ev.urls[0]) == 2000
+
+
+def test_update_url_max_length():
+    with pytest.raises(ValidationError):
+        EventUpdate(urls=["https://example.com/" + "x" * 2000])
+
+
+# ---------------------------------------------------------------------------
+# Detail response nested serialization
+# ---------------------------------------------------------------------------
+
+
+def test_detail_multiple_tags():
+    obj = make_event_obj(
+        occurrences=[],
+        urls=[],
+        tags=[make_tag_obj(id=1, name="music"), make_tag_obj(id=2, name="art")],
+    )
+    resp = EventDetailResponse.model_validate(obj, from_attributes=True)
+    assert len(resp.tags) == 2
+    assert {t.name for t in resp.tags} == {"music", "art"}
+
+
+def test_detail_with_occurrences():
+    occ = SimpleNamespace(
+        id=1, start_date=date(2026, 4, 1), start_time="18:00",
+        end_date=None, end_time=None, sort_order=0,
+    )
+    obj = make_event_obj(occurrences=[occ], urls=[], tags=[])
+    resp = EventDetailResponse.model_validate(obj, from_attributes=True)
+    assert len(resp.occurrences) == 1
+    assert resp.occurrences[0].start_date == date(2026, 4, 1)
+
+
+def test_detail_with_urls():
+    url_obj = SimpleNamespace(id=1, url="https://example.com", sort_order=0)
+    obj = make_event_obj(occurrences=[], urls=[url_obj], tags=[])
+    resp = EventDetailResponse.model_validate(obj, from_attributes=True)
+    assert len(resp.urls) == 1
+    assert resp.urls[0].url == "https://example.com"
+
+
+def test_detail_empty_relations():
+    obj = make_event_obj(occurrences=[], urls=[], tags=[])
+    resp = EventDetailResponse.model_validate(obj, from_attributes=True)
+    assert resp.occurrences == []
+    assert resp.urls == []
+    assert resp.tags == []
