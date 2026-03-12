@@ -28,75 +28,82 @@ except ImportError:
 
 # Configuration
 DB_CONFIG = {
-    'local': {
-        'host': 'localhost',
-        'database': 'momaverse',
-        'user': os.environ.get('USER', 'postgres'),
-        'password': ''
+    "local": {
+        "host": "localhost",
+        "database": "momaverse",
+        "user": os.environ.get("USER", "postgres"),
+        "password": "",
     },
-    'production': {
-        'host': 'localhost',
-        'database': 'momaverse',
-        'user': 'momaverse',
-        'password': os.environ.get('DB_PASSWORD', '')
-    }
+    "production": {
+        "host": "localhost",
+        "database": "momaverse",
+        "user": "momaverse",
+        "password": os.environ.get("DB_PASSWORD", ""),
+    },
 }
 
 # Paths
 SCRIPT_DIR = Path(__file__).parent
-SCHEMA_FILE = SCRIPT_DIR / 'schema_postgres.sql'
+SCHEMA_FILE = SCRIPT_DIR / "schema_postgres.sql"
 
 # Tables in order for dropping (respects foreign keys)
 ALL_TABLES = [
     # Sync & history
-    'conflicts',
-    'sync_state',
-    'edits',
+    "conflicts",
+    "sync_state",
+    "edits",
     # Crawl data (must be dropped before events)
-    'event_sources',
-    'crawl_event_tags',
-    'crawl_event_occurrences',
-    'crawl_events',
-    'crawl_results',
-    'crawl_runs',
+    "event_sources",
+    "crawl_event_tags",
+    "crawl_event_occurrences",
+    "crawl_events",
+    "crawl_results",
+    "crawl_runs",
     # Events
-    'event_tags',
-    'location_tags',
-    'event_urls',
-    'event_occurrences',
-    'events',
+    "event_tags",
+    "location_tags",
+    "event_urls",
+    "event_occurrences",
+    "events",
     # Instagram
-    'website_instagram',
-    'location_instagram',
-    'instagram_accounts',
+    "website_instagram",
+    "location_instagram",
+    "instagram_accounts",
     # Websites and locations
-    'website_tags',
-    'website_locations',
-    'website_urls',
-    'websites',
-    'location_alternate_names',
-    'locations',
-    'tags',
+    "website_tags",
+    "website_locations",
+    "website_urls",
+    "websites",
+    "location_alternate_names",
+    "locations",
+    "tags",
     # Other
-    'tag_rules',
-    'feedback',
-    'users',
-    'grantees',
+    "tag_rules",
+    "feedback",
+    "users",
+    "grantees",
 ]
 
 # Enum types to drop
 ALL_TYPES = [
-    'source_type', 'crawl_mode', 'crawl_run_status', 'crawl_result_status',
-    'tag_rule_type', 'edit_action', 'edit_source', 'sync_source', 'conflict_status',
+    "source_type",
+    "crawl_mode",
+    "crawl_run_status",
+    "crawl_result_status",
+    "tag_rule_type",
+    "edit_action",
+    "edit_source",
+    "sync_source",
+    "conflict_status",
 ]
 
 
 def get_db_config():
     """Get database config based on environment."""
-    env = os.environ.get('MOMAVERSE_ENV', 'local')
+    env = os.environ.get("MOMAVERSE_ENV", "local")
     if env not in DB_CONFIG:
         print(f"Warning: Unknown environment '{env}', using 'local'")
-        env = 'local'
+        env = "local"
     return DB_CONFIG[env]
 
 
@@ -104,10 +111,10 @@ def create_connection(database=None):
     """Create database connection."""
     config = get_db_config()
     conn_params = {
-        'host': config['host'],
-        'user': config['user'],
-        'password': config['password'],
-        'database': database or config['database']
+        "host": config["host"],
+        "user": config["user"],
+        "password": config["password"],
+        "database": database or config["database"],
     }
 
     try:
@@ -121,7 +128,7 @@ def create_connection(database=None):
 def create_database():
     """Create database if it doesn't exist."""
     config = get_db_config()
-    connection = create_connection(database='postgres')
+    connection = create_connection(database="postgres")
     if not connection:
         return False
 
@@ -129,8 +136,7 @@ def create_database():
         connection.autocommit = True
         cursor = connection.cursor()
         cursor.execute(
-            "SELECT 1 FROM pg_database WHERE datname = %s",
-            (config['database'],)
+            "SELECT 1 FROM pg_database WHERE datname = %s", (config["database"],)
         )
         if not cursor.fetchone():
             cursor.execute(f"CREATE DATABASE {config['database']}")
@@ -171,7 +177,7 @@ def create_schema(connection):
     cursor = connection.cursor()
 
     try:
-        with open(SCHEMA_FILE, 'r') as f:
+        with open(SCHEMA_FILE, "r") as f:
             schema_sql = f.read()
 
         cursor.execute(schema_sql)
@@ -191,12 +197,12 @@ def show_stats(connection):
     cursor = connection.cursor()
     try:
         tables = [
-            ('locations', 'Locations'),
-            ('websites', 'Websites'),
-            ('events', 'Events'),
-            ('tags', 'Unique tags'),
-            ('crawl_runs', 'Crawl runs'),
-            ('crawl_results', 'Crawl results'),
+            ("locations", "Locations"),
+            ("websites", "Websites"),
+            ("events", "Events"),
+            ("tags", "Unique tags"),
+            ("crawl_runs", "Crawl runs"),
+            ("crawl_results", "Crawl results"),
         ]
 
         print("\n--- Database Statistics ---")
@@ -215,9 +221,12 @@ def show_stats(connection):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Setup Momaverse database schema')
-    parser.add_argument('--drop-tables', action='store_true',
-                        help='Drop existing tables before creating (WARNING: deletes data)')
+    parser = argparse.ArgumentParser(description="Setup Momaverse database schema")
+    parser.add_argument(
+        "--drop-tables",
+        action="store_true",
+        help="Drop existing tables before creating (WARNING: deletes data)",
+    )
     args = parser.parse_args()
 
     print("Momaverse Database Setup")
@@ -257,5 +266,5 @@ def main():
         connection.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from api.schemas.feedback import FeedbackCreate
+from pydantic import ValidationError
 
 
 def test_create_valid():
@@ -17,7 +16,7 @@ def test_create_with_page_url():
 
 def test_create_message_required():
     with pytest.raises(ValidationError):
-        FeedbackCreate()
+        FeedbackCreate()  # type: ignore[call-arg]
 
 
 def test_create_message_max_length():

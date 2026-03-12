@@ -27,29 +27,29 @@ except ImportError:
 
 # Database Configuration
 DB_CONFIG = {
-    'local': {
-        'host': 'localhost',
-        'database': 'momaverse',
-        'user': os.environ.get('USER', 'postgres'),
-        'password': ''
+    "local": {
+        "host": "localhost",
+        "database": "momaverse",
+        "user": os.environ.get("USER", "postgres"),
+        "password": "",
     },
-    'production': {
-        'host': 'localhost',
-        'database': 'momaverse',
-        'user': 'momaverse',
-        'password': os.environ.get('DB_PASSWORD', '')
-    }
+    "production": {
+        "host": "localhost",
+        "database": "momaverse",
+        "user": "momaverse",
+        "password": os.environ.get("DB_PASSWORD", ""),
+    },
 }
 
 SCRIPT_DIR = Path(__file__).parent
-SCHEMA_FILE = SCRIPT_DIR / 'schema_postgres.sql'
+SCHEMA_FILE = SCRIPT_DIR / "schema_postgres.sql"
 
 
 def get_db_config():
     """Get database config based on environment."""
-    env = os.environ.get('MOMAVERSE_ENV', 'local')
+    env = os.environ.get("MOMAVERSE_ENV", "local")
     if env not in DB_CONFIG:
-        env = 'local'
+        env = "local"
     return DB_CONFIG[env]
 
 
@@ -58,10 +58,10 @@ def create_connection():
     config = get_db_config()
     try:
         return psycopg2.connect(
-            host=config['host'],
-            database=config['database'],
-            user=config['user'],
-            password=config['password']
+            host=config["host"],
+            database=config["database"],
+            user=config["user"],
+            password=config["password"],
         )
     except Error as e:
         print(f"Error connecting to database: {e}")
@@ -70,7 +70,7 @@ def create_connection():
 
 def get_current_schema(cursor):
     """Get current database schema as a structured dict."""
-    schema = {'tables': {}}
+    schema = {"tables": {}}
 
     # Get all tables
     cursor.execute("""
@@ -80,101 +80,99 @@ def get_current_schema(cursor):
     tables = [row[0] for row in cursor.fetchall()]
 
     for table in tables:
-        schema['tables'][table] = {
-            'columns': {},
-            'indexes': {}
-        }
+        schema["tables"][table] = {"columns": {}, "indexes": {}}
 
         # Get columns
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT column_name, data_type, is_nullable, column_default
             FROM information_schema.columns
             WHERE table_schema = 'public' AND table_name = %s
             ORDER BY ordinal_position
-        """, (table,))
+        """,
+            (table,),
+        )
 
         for row in cursor.fetchall():
             col_name = row[0]
-            schema['tables'][table]['columns'][col_name] = {
-                'type': row[1],
-                'nullable': row[2] == 'YES',
-                'default': row[3]
+            schema["tables"][table]["columns"][col_name] = {
+                "type": row[1],
+                "nullable": row[2] == "YES",
+                "default": row[3],
             }
 
         # Get indexes
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT indexname, indexdef
             FROM pg_indexes
             WHERE schemaname = 'public' AND tablename = %s
-        """, (table,))
+        """,
+            (table,),
+        )
 
         for row in cursor.fetchall():
-            schema['tables'][table]['indexes'][row[0]] = {
-                'definition': row[1]
-            }
+            schema["tables"][table]["indexes"][row[0]] = {"definition": row[1]}
 
     return schema
 
 
 def parse_schema_sql():
     """Parse schema_postgres.sql to extract expected tables and columns."""
-    with open(SCHEMA_FILE, 'r') as f:
+    with open(SCHEMA_FILE, "r") as f:
         content = f.read()
 
-    schema = {'tables': {}}
+    schema = {"tables": {}}
 
     # Find all CREATE TABLE statements
     table_pattern = re.compile(
-        r'CREATE TABLE IF NOT EXISTS (\w+)\s*\((.*?)\);',
-        re.DOTALL | re.IGNORECASE
+        r"CREATE TABLE IF NOT EXISTS (\w+)\s*\((.*?)\);", re.DOTALL | re.IGNORECASE
     )
 
     for match in table_pattern.finditer(content):
         table_name = match.group(1)
         table_body = match.group(2)
 
-        schema['tables'][table_name] = {
-            'columns': {},
-            'indexes': {}
-        }
+        schema["tables"][table_name] = {"columns": {}, "indexes": {}}
 
-        lines = [line.strip() for line in table_body.split('\n') if line.strip()]
+        lines = [line.strip() for line in table_body.split("\n") if line.strip()]
 
         for line in lines:
-            line = line.rstrip(',')
-            if not line or line.startswith('--'):
+            line = line.rstrip(",")
+            if not line or line.startswith("--"):
                 continue
             # Skip constraints
-            if any(line.upper().startswith(kw) for kw in ['UNIQUE', 'FOREIGN KEY', 'PRIMARY KEY']):
+            if any(
+                line.upper().startswith(kw)
+                for kw in ["UNIQUE", "FOREIGN KEY", "PRIMARY KEY"]
+            ):
                 continue
 
             # Parse column definitions
             col_match = re.match(
-                r'(\w+)\s+(SERIAL|INTEGER|BOOLEAN|TEXT|VARCHAR\([^)]+\)|DATE|TIMESTAMP|DECIMAL\([^)]+\)|CHAR\([^)]+\)|JSONB|\w+)',
-                line, re.IGNORECASE
+                r"(\w+)\s+(SERIAL|INTEGER|BOOLEAN|TEXT|VARCHAR\([^)]+\)|DATE|TIMESTAMP|DECIMAL\([^)]+\)|CHAR\([^)]+\)|JSONB|\w+)",
+                line,
+                re.IGNORECASE,
             )
             if col_match:
                 col_name = col_match.group(1)
                 col_type = col_match.group(2).lower()
-                nullable = 'NOT NULL' not in line.upper()
+                nullable = "NOT NULL" not in line.upper()
 
-                schema['tables'][table_name]['columns'][col_name] = {
-                    'type': col_type,
-                    'nullable': nullable,
-                    'full_definition': line
+                schema["tables"][table_name]["columns"][col_name] = {
+                    "type": col_type,
+                    "nullable": nullable,
+                    "full_definition": line,
                 }
 
     # Find CREATE INDEX statements
-    index_pattern = re.compile(
-        r'CREATE INDEX (\w+) ON (\w+)',
-        re.IGNORECASE
-    )
+    index_pattern = re.compile(r"CREATE INDEX (\w+) ON (\w+)", re.IGNORECASE)
     for match in index_pattern.finditer(content):
         idx_name = match.group(1)
         table_name = match.group(2)
-        if table_name in schema['tables']:
-            schema['tables'][table_name]['indexes'][idx_name] = {
-                'definition': match.group(0)
+        if table_name in schema["tables"]:
+            schema["tables"][table_name]["indexes"][idx_name] = {
+                "definition": match.group(0)
             }
 
     return schema
@@ -184,35 +182,33 @@ def generate_migrations(current, expected):
     """Compare schemas and generate migration SQL statements."""
     migrations = []
 
-    for table_name in expected['tables']:
-        if table_name not in current['tables']:
-            migrations.append((
-                f"Table {table_name} is missing - run setup.py to create it",
-                None
-            ))
+    for table_name in expected["tables"]:
+        if table_name not in current["tables"]:
+            migrations.append(
+                (f"Table {table_name} is missing - run setup.py to create it", None)
+            )
             continue
 
-        current_table = current['tables'][table_name]
-        expected_table = expected['tables'][table_name]
+        current_table = current["tables"][table_name]
+        expected_table = expected["tables"][table_name]
 
         # Check for missing columns
-        for col_name, col_info in expected_table['columns'].items():
-            if col_name not in current_table['columns']:
-                col_def = col_info['full_definition']
-                col_def = col_def.rstrip(',')
+        for col_name, col_info in expected_table["columns"].items():
+            if col_name not in current_table["columns"]:
+                col_def = col_info["full_definition"]
+                col_def = col_def.rstrip(",")
                 sql = f"ALTER TABLE {table_name} ADD COLUMN {col_def}"
-                migrations.append((
-                    f"Add column {table_name}.{col_name}",
-                    sql
-                ))
+                migrations.append((f"Add column {table_name}.{col_name}", sql))
 
         # Check for missing indexes
-        for idx_name in expected_table['indexes']:
-            if idx_name not in current_table['indexes']:
-                migrations.append((
-                    f"Add index {idx_name} on {table_name}",
-                    expected_table['indexes'][idx_name].get('definition')
-                ))
+        for idx_name in expected_table["indexes"]:
+            if idx_name not in current_table["indexes"]:
+                migrations.append(
+                    (
+                        f"Add index {idx_name} on {table_name}",
+                        expected_table["indexes"][idx_name].get("definition"),
+                    )
+                )
 
     return migrations
 
@@ -238,7 +234,7 @@ def run_migrations(cursor, connection, migrations, dry_run=False):
                 print(f"  - {description}...")
                 cursor.execute(sql)
                 connection.commit()
-                print(f"    [OK]")
+                print("    [OK]")
             except Error as e:
                 print(f"    [ERROR] {e}")
                 connection.rollback()
@@ -248,9 +244,12 @@ def run_migrations(cursor, connection, migrations, dry_run=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Migrate database schema')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Show what would be changed without applying')
+    parser = argparse.ArgumentParser(description="Migrate database schema")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be changed without applying",
+    )
     args = parser.parse_args()
 
     print("Schema Migration (PostgreSQL)")
@@ -297,5 +296,5 @@ def main():
         connection.close()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

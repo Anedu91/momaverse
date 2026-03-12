@@ -23,5 +23,3 @@ class EditResponse(BaseModel):
     user_id: int | None = None
     created_at: datetime
     applied_at: datetime | None = None
-
-

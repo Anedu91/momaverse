@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     CHAR,
@@ -88,7 +89,7 @@ class CrawlEvent(Base):
     sublocation: Mapped[str | None] = mapped_column(String(255))
     location_id: Mapped[int | None] = mapped_column(Integer)
     url: Mapped[str | None] = mapped_column(String(2000))
-    raw_data: Mapped[dict | None] = mapped_column(JSONB)
+    raw_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     content_hash: Mapped[str | None] = mapped_column(CHAR(64))
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, server_default=func.current_timestamp()

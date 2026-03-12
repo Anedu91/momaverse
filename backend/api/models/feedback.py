@@ -1,8 +1,8 @@
-from api.database import Base
-from api.models.base import CreatedAtMixin
-
 from sqlalchemy import String, Text
 from sqlalchemy.orm import Mapped, mapped_column
+
+from api.database import Base
+from api.models.base import CreatedAtMixin
 
 
 class Feedback(CreatedAtMixin, Base):

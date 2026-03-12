@@ -4,7 +4,6 @@ from datetime import datetime
 from sqlalchemy import TIMESTAMP, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-
 # ============================================================================
 # PostgreSQL Enum Types (all pre-existing, create_type=False when used)
 # ============================================================================

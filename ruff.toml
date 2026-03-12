@@ -1,0 +1,32 @@
+target-version = "py314"
+line-length = 88
+
+# Only check project Python code, not venvs or node_modules
+extend-exclude = [
+    "backend/.venv",
+    "pipeline/venv",
+    "node_modules",
+]
+
+[lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (F401 unused imports, F841 unused variables)
+    "I",   # isort (import sorting)
+]
+# F401 and F841 are NOT in fixable — ruff will error, not auto-fix
+fixable = ["I", "E", "W"]
+unfixable = ["F401", "F841"]
+
+[lint.per-file-ignores]
+# SQLAlchemy models use string forward references resolved at runtime
+"backend/api/models/*.py" = ["F821"]
+# Scripts manipulate sys.path before importing
+"scripts/*.py" = ["E402", "E501"]
+# Pipeline has long prompt strings and is a separate project
+"pipeline/*.py" = ["E501"]
+
+[format]
+quote-style = "double"
+indent-style = "space"

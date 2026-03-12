@@ -39,8 +39,8 @@ Environment variables (in .env):
 
 import argparse
 import os
-import sys
 import subprocess
+import sys
 from pathlib import Path
 
 # Add project root to path for .env loading
@@ -48,80 +48,84 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
-load_dotenv(PROJECT_ROOT / '.env')
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 # SSH Configuration
-SSH_HOST = os.getenv('SSH_HOST', '')
-SSH_USER = os.getenv('SSH_USER', '')
-SSH_PORT = os.getenv('SSH_PORT', '21098')
-SSH_KEY = os.getenv('SSH_KEY', '')
+SSH_HOST = os.getenv("SSH_HOST", "")
+SSH_USER = os.getenv("SSH_USER", "")
+SSH_PORT = os.getenv("SSH_PORT", "21098")
+SSH_KEY = os.getenv("SSH_KEY", "")
 
 # Production database (remote)
 PROD_DB = {
-    'name': os.getenv('PROD_DB_NAME', 'fomoowsq_fomo'),
-    'user': os.getenv('PROD_DB_USER', 'fomoowsq_root'),
-    'password': os.getenv('PROD_DB_PASS', ''),
+    "name": os.getenv("PROD_DB_NAME", "fomoowsq_fomo"),
+    "user": os.getenv("PROD_DB_USER", "fomoowsq_root"),
+    "password": os.getenv("PROD_DB_PASS", ""),
 }
 
 # Local database (XAMPP)
 LOCAL_DB = {
-    'host': 'localhost',
-    'name': 'fomo',
-    'user': 'root',
-    'password': '',
+    "host": "localhost",
+    "name": "fomo",
+    "user": "root",
+    "password": "",
 }
 
 # Path to mysql executables (detect platform)
 import platform
-if platform.system() == 'Darwin':  # macOS
-    MYSQL_PATH = os.getenv('MYSQL_PATH', '/Applications/XAMPP/xamppfiles/bin/mysql')
-    MYSQLDUMP_PATH = os.getenv('MYSQLDUMP_PATH', '/Applications/XAMPP/xamppfiles/bin/mysqldump')
+
+if platform.system() == "Darwin":  # macOS
+    MYSQL_PATH = os.getenv("MYSQL_PATH", "/Applications/XAMPP/xamppfiles/bin/mysql")
+    MYSQLDUMP_PATH = os.getenv(
+        "MYSQLDUMP_PATH", "/Applications/XAMPP/xamppfiles/bin/mysqldump"
+    )
 else:  # Windows
-    MYSQL_PATH = os.getenv('MYSQL_PATH', r'C:\xampp\mysql\bin\mysql.exe')
-    MYSQLDUMP_PATH = os.getenv('MYSQLDUMP_PATH', r'C:\xampp\mysql\bin\mysqldump.exe')
+    MYSQL_PATH = os.getenv("MYSQL_PATH", r"C:\xampp\mysql\bin\mysql.exe")
+    MYSQLDUMP_PATH = os.getenv("MYSQLDUMP_PATH", r"C:\xampp\mysql\bin\mysqldump.exe")
 
 # Tables to sync (order matters for foreign key constraints)
 SYNC_TABLES = [
     # Core reference tables first
-    'tags',
-    'tag_rules',
-    'instagram_accounts',
+    "tags",
+    "tag_rules",
+    "instagram_accounts",
     # User accounts (for edit tracking)
-    'users',
+    "users",
     # Locations
-    'locations',
-    'location_tags',
-    'location_alternate_names',
-    'location_instagram',
+    "locations",
+    "location_tags",
+    "location_alternate_names",
+    "location_instagram",
     # Websites
-    'websites',
-    'website_locations',
-    'website_tags',
-    'website_urls',
-    'website_instagram',
+    "websites",
+    "website_locations",
+    "website_tags",
+    "website_urls",
+    "website_instagram",
     # Events (depend on locations, websites, tags)
-    'events',
-    'event_occurrences',
-    'event_tags',
-    'event_urls',
-    'event_sources',
+    "events",
+    "event_occurrences",
+    "event_tags",
+    "event_urls",
+    "event_sources",
     # Edit history and sync (depend on users)
-    'edits',
-    'sync_state',
-    'conflicts',
+    "edits",
+    "sync_state",
+    "conflicts",
 ]
 
 # Crawl tables (optional, large)
 CRAWL_TABLES = [
-    'crawl_runs',
-    'crawl_results',
-    'crawl_events',
-    'crawl_event_occurrences',
-    'crawl_event_tags',
+    "crawl_runs",
+    "crawl_results",
+    "crawl_events",
+    "crawl_event_occurrences",
+    "crawl_event_tags",
 ]
 
 
-def run_command(cmd, capture_output=True, input_data=None, encoding='utf-8'):
+def run_command(cmd, capture_output=True, input_data=None, encoding="utf-8"):
     """Run a command and return output."""
     try:
         result = subprocess.run(
@@ -131,16 +135,16 @@ def run_command(cmd, capture_output=True, input_data=None, encoding='utf-8'):
             input=input_data,
             shell=True,
             encoding=encoding,
-            errors='replace'  # Replace undecodable bytes instead of failing
+            errors="replace",  # Replace undecodable bytes instead of failing
         )
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
-        return False, '', str(e)
+        return False, "", str(e)
 
 
 def get_ssh_opts():
     """Build SSH options string."""
-    ssh_opts = f'-p {SSH_PORT}'
+    ssh_opts = f"-p {SSH_PORT}"
     if SSH_KEY:
         key_path = PROJECT_ROOT / SSH_KEY
         ssh_opts += f' -i "{key_path}"'
@@ -157,28 +161,28 @@ def dump_local_tables(tables, create_tables=False, full_sync=False):
     """
     print(f"Dumping {len(tables)} tables from local database...")
 
-    tables_str = ' '.join(tables)
-    temp_file = PROJECT_ROOT / 'scripts' / 'temp_sync.sql'
+    tables_str = " ".join(tables)
+    temp_file = PROJECT_ROOT / "scripts" / "temp_sync.sql"
 
     # Build mysqldump options
     # --no-create-info: skip CREATE TABLE (unless --create-tables is used)
     # Write directly to file to avoid encoding issues with large dumps
-    opts = ''
+    opts = ""
     if not create_tables:
-        opts += ' --no-create-info'
+        opts += " --no-create-info"
 
     dump_cmd = (
         f'"{MYSQLDUMP_PATH}" -u {LOCAL_DB["user"]} '
-        f'{LOCAL_DB["name"]} {tables_str} '
-        f'{opts} '
+        f"{LOCAL_DB['name']} {tables_str} "
+        f"{opts} "
         f'--result-file="{temp_file}"'
     )
 
-    if LOCAL_DB['password']:
+    if LOCAL_DB["password"]:
         dump_cmd = (
             f'"{MYSQLDUMP_PATH}" -u {LOCAL_DB["user"]} -p{LOCAL_DB["password"]} '
-            f'{LOCAL_DB["name"]} {tables_str} '
-            f'{opts} '
+            f"{LOCAL_DB['name']} {tables_str} "
+            f"{opts} "
             f'--result-file="{temp_file}"'
         )
 
@@ -203,9 +207,9 @@ def dump_local_tables(tables, create_tables=False, full_sync=False):
         delete_sql = "\n".join(delete_statements) + "\n\n"
 
         # Read existing dump and prepend delete statements
-        with open(temp_file, 'r', encoding='utf-8', errors='replace') as f:
+        with open(temp_file, "r", encoding="utf-8", errors="replace") as f:
             dump_content = f.read()
-        with open(temp_file, 'w', encoding='utf-8') as f:
+        with open(temp_file, "w", encoding="utf-8") as f:
             f.write(delete_sql + dump_content)
 
     size_mb = temp_file.stat().st_size / (1024 * 1024)
@@ -223,7 +227,7 @@ def count_rows_per_table(tables):
         if success:
             counts[table] = stdout.strip()
         else:
-            counts[table] = '?'
+            counts[table] = "?"
     return counts
 
 
@@ -274,7 +278,7 @@ def validate_config():
     if not SSH_HOST or not SSH_USER:
         errors.append("SSH_HOST and SSH_USER must be set in .env")
 
-    if not PROD_DB['password']:
+    if not PROD_DB["password"]:
         errors.append("PROD_DB_PASS must be set in .env")
 
     if not Path(MYSQL_PATH).exists():
@@ -287,17 +291,30 @@ def validate_config():
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Sync local database to production')
-    parser.add_argument('--dry-run', action='store_true',
-                        help='Show what would be synced without actually syncing')
-    parser.add_argument('--tables', type=str,
-                        help='Comma-separated list of specific tables to sync')
-    parser.add_argument('--create-tables', action='store_true',
-                        help='Include CREATE TABLE statements (for new tables)')
-    parser.add_argument('--include-crawl', action='store_true',
-                        help='Include crawl_* tables (large, ~780k rows)')
-    parser.add_argument('--full-sync', action='store_true',
-                        help='Delete all data from tables before inserting (makes local the source of truth)')
+    parser = argparse.ArgumentParser(description="Sync local database to production")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be synced without actually syncing",
+    )
+    parser.add_argument(
+        "--tables", type=str, help="Comma-separated list of specific tables to sync"
+    )
+    parser.add_argument(
+        "--create-tables",
+        action="store_true",
+        help="Include CREATE TABLE statements (for new tables)",
+    )
+    parser.add_argument(
+        "--include-crawl",
+        action="store_true",
+        help="Include crawl_* tables (large, ~780k rows)",
+    )
+    parser.add_argument(
+        "--full-sync",
+        action="store_true",
+        help="Delete all data from tables before inserting (makes local the source of truth)",
+    )
     args = parser.parse_args()
 
     # Validate configuration
@@ -312,7 +329,7 @@ def main():
     # Determine which tables to sync
     all_valid_tables = SYNC_TABLES + CRAWL_TABLES
     if args.tables:
-        tables = [t.strip() for t in args.tables.split(',')]
+        tables = [t.strip() for t in args.tables.split(",")]
         # Validate table names
         invalid = [t for t in tables if t not in all_valid_tables]
         if invalid:
@@ -326,7 +343,9 @@ def main():
 
     print(f"Tables to sync: {', '.join(tables)}")
     if args.full_sync:
-        print("Mode: FULL SYNC (will DELETE all data first, local becomes source of truth)")
+        print(
+            "Mode: FULL SYNC (will DELETE all data first, local becomes source of truth)"
+        )
     elif args.create_tables:
         print("Mode: CREATE + INSERT (will create tables if missing)")
     else:
@@ -346,14 +365,16 @@ def main():
 
     # Confirm before syncing
     response = input("Proceed with sync to production? [y/N] ")
-    if response.lower() != 'y':
+    if response.lower() != "y":
         print("Sync cancelled.")
         return
 
     print()
 
     # Dump local tables to temp file
-    dump_file = dump_local_tables(tables, create_tables=args.create_tables, full_sync=args.full_sync)
+    dump_file = dump_local_tables(
+        tables, create_tables=args.create_tables, full_sync=args.full_sync
+    )
     if dump_file is None:
         sys.exit(1)
 
@@ -364,5 +385,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
