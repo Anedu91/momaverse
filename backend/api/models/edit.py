@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    CHAR,
     TIMESTAMP,
     Enum,
     ForeignKey,
@@ -19,7 +20,7 @@ class Edit(Base):
     __tablename__ = "edits"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    edit_uuid: Mapped[str] = mapped_column(String(36), unique=True)
+    edit_uuid: Mapped[str] = mapped_column(CHAR(36), unique=True)
     table_name: Mapped[str] = mapped_column(String(50))
     record_id: Mapped[int] = mapped_column(Integer)
     field_name: Mapped[str | None] = mapped_column(String(100))
