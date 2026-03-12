@@ -26,7 +26,7 @@ class Settings(BaseSettings):
         userinfo = self.db_user
         if self.db_pass:
             userinfo = f"{self.db_user}:{self.db_pass}"
-        return f"postgresql://{userinfo}@{self.db_host}/{self.db_name}"
+        return f"postgresql+asyncpg://{userinfo}@{self.db_host}/{self.db_name}"
 
 
 @lru_cache
