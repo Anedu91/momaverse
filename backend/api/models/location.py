@@ -1,12 +1,11 @@
-from datetime import datetime
-
-from sqlalchemy import TIMESTAMP, ForeignKey, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import ForeignKey, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
+from api.models.base import TimestampMixin
 
 
-class Location(Base):
+class Location(TimestampMixin, Base):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -15,16 +14,10 @@ class Location(Base):
     very_short_name: Mapped[str | None] = mapped_column(String(50))
     address: Mapped[str | None] = mapped_column(String(500))
     description: Mapped[str | None] = mapped_column(Text)
-    lat: Mapped[float | None] = mapped_column(Numeric(10, 6))
-    lng: Mapped[float | None] = mapped_column(Numeric(10, 6))
+    lat: Mapped[float | None] = mapped_column(Numeric(10, 6, asdecimal=False))
+    lng: Mapped[float | None] = mapped_column(Numeric(10, 6, asdecimal=False))
     emoji: Mapped[str | None] = mapped_column(String(10))
     alt_emoji: Mapped[str | None] = mapped_column(String(10))
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )
 
     # Relationships
     alternate_names: Mapped[list["LocationAlternateName"]] = relationship(

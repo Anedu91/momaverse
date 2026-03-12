@@ -1,7 +1,6 @@
 from datetime import date, datetime
 
 from sqlalchemy import (
-    TIMESTAMP,
     Boolean,
     Date,
     Enum,
@@ -11,16 +10,15 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import CrawlMode, SourceType
+from api.models.base import CrawlMode, SourceType, TimestampMixin
 
 
-class Website(Base):
+class Website(TimestampMixin, Base):
     __tablename__ = "websites"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -42,22 +40,16 @@ class Website(Base):
     )
     crawl_after: Mapped[date | None] = mapped_column(Date)
     force_crawl: Mapped[bool] = mapped_column(Boolean, server_default="false")
-    last_crawled_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )
+    last_crawled_at: Mapped[datetime | None] = mapped_column()
     delay_before_return_html: Mapped[int | None] = mapped_column(Integer)
-    content_filter_threshold: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    content_filter_threshold: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
     scan_full_page: Mapped[bool | None] = mapped_column(Boolean)
     remove_overlay_elements: Mapped[bool | None] = mapped_column(Boolean)
     javascript_enabled: Mapped[bool | None] = mapped_column(Boolean)
     text_mode: Mapped[bool | None] = mapped_column(Boolean)
     light_mode: Mapped[bool | None] = mapped_column(Boolean)
     use_stealth: Mapped[bool | None] = mapped_column(Boolean)
-    scroll_delay: Mapped[float | None] = mapped_column(Numeric(3, 2))
+    scroll_delay: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
     crawl_timeout: Mapped[int | None] = mapped_column(Integer)
     crawl_frequency_locked: Mapped[bool] = mapped_column(
         Boolean, server_default="false"

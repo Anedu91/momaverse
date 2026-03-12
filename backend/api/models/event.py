@@ -14,9 +14,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
+from api.models.base import TimestampMixin
 
 
-class Event(Base):
+class Event(TimestampMixin, Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -31,12 +32,6 @@ class Event(Base):
     sublocation: Mapped[str | None] = mapped_column(String(255))
     website_id: Mapped[int | None] = mapped_column(
         ForeignKey("websites.id", ondelete="SET NULL")
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP, server_default=func.current_timestamp()
     )
     archived: Mapped[bool] = mapped_column(Boolean, server_default="false")
     suppressed: Mapped[bool] = mapped_column(Boolean, server_default="false")

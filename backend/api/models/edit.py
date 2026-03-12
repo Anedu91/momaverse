@@ -89,5 +89,6 @@ class Conflict(Base):
     local_edit: Mapped["Edit"] = relationship(foreign_keys=[local_edit_id])
     website_edit: Mapped["Edit"] = relationship(foreign_keys=[website_edit_id])
     resolved_by_user: Mapped["User"] = relationship(
-        back_populates="resolved_conflicts"
+        foreign_keys=[resolved_by],
+        back_populates="resolved_conflicts",
     )
