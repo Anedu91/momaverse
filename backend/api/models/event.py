@@ -40,9 +40,7 @@ class Event(TimestampMixin, Base):
     # Relationships
     location: Mapped["Location"] = relationship(back_populates="events")
     website: Mapped["Website"] = relationship(back_populates="events")
-    occurrences: Mapped[list["EventOccurrence"]] = relationship(
-        back_populates="event"
-    )
+    occurrences: Mapped[list["EventOccurrence"]] = relationship(back_populates="event")
     urls: Mapped[list["EventUrl"]] = relationship(back_populates="event")
     tags: Mapped[list["Tag"]] = relationship(secondary="event_tags", viewonly=True)
     sources: Mapped[list["EventSource"]] = relationship(back_populates="event")
@@ -52,9 +50,7 @@ class EventOccurrence(Base):
     __tablename__ = "event_occurrences"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    event_id: Mapped[int] = mapped_column(
-        ForeignKey("events.id", ondelete="CASCADE")
-    )
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
     start_date: Mapped[date] = mapped_column(Date)
     start_time: Mapped[str | None] = mapped_column(String(20))
     end_date: Mapped[date | None] = mapped_column(Date)
@@ -69,9 +65,7 @@ class EventUrl(Base):
     __tablename__ = "event_urls"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    event_id: Mapped[int] = mapped_column(
-        ForeignKey("events.id", ondelete="CASCADE")
-    )
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(String(2000))
     sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
 
@@ -84,12 +78,8 @@ class EventTag(Base):
     __table_args__ = (UniqueConstraint("event_id", "tag_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    event_id: Mapped[int] = mapped_column(
-        ForeignKey("events.id", ondelete="CASCADE")
-    )
-    tag_id: Mapped[int] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE")
-    )
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
 
 
 class EventSource(Base):
@@ -97,9 +87,7 @@ class EventSource(Base):
     __table_args__ = (UniqueConstraint("event_id", "crawl_event_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    event_id: Mapped[int] = mapped_column(
-        ForeignKey("events.id", ondelete="CASCADE")
-    )
+    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
     crawl_event_id: Mapped[int] = mapped_column(
         ForeignKey("crawl_events.id", ondelete="CASCADE")
     )

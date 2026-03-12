@@ -22,6 +22,21 @@ Copy the example env file and edit as needed:
 cp .env.example .env
 ```
 
+## Pre-commit Hooks
+
+Install the pre-commit hooks so ruff (linter + formatter) and mypy (type checker) run on every commit:
+
+```bash
+cd backend
+uv run pre-commit install
+```
+
+To verify everything passes:
+
+```bash
+uv run pre-commit run --all-files
+```
+
 ## Run
 
 ```bash

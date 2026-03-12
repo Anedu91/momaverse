@@ -58,9 +58,7 @@ class LocationTag(Base):
     location_id: Mapped[int] = mapped_column(
         ForeignKey("locations.id", ondelete="CASCADE")
     )
-    tag_id: Mapped[int] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE")
-    )
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
 
 
 class LocationInstagram(Base):

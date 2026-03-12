@@ -1,12 +1,13 @@
 from datetime import datetime
 from types import SimpleNamespace
+from typing import Any
 
 
 def make_timestamp() -> datetime:
     return datetime(2026, 1, 1, 12, 0, 0)
 
 
-def make_location_obj(**overrides) -> SimpleNamespace:
+def make_location_obj(**overrides: Any) -> SimpleNamespace:
     now = make_timestamp()
     defaults = dict(
         id=1,
@@ -26,7 +27,7 @@ def make_location_obj(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def make_event_obj(**overrides) -> SimpleNamespace:
+def make_event_obj(**overrides: Any) -> SimpleNamespace:
     now = make_timestamp()
     defaults = dict(
         id=1,
@@ -48,7 +49,7 @@ def make_event_obj(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def make_website_obj(**overrides) -> SimpleNamespace:
+def make_website_obj(**overrides: Any) -> SimpleNamespace:
     now = make_timestamp()
     defaults = dict(
         id=1,
@@ -64,7 +65,7 @@ def make_website_obj(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def make_user_obj(**overrides) -> SimpleNamespace:
+def make_user_obj(**overrides: Any) -> SimpleNamespace:
     now = make_timestamp()
     defaults = dict(
         id=1,
@@ -77,7 +78,7 @@ def make_user_obj(**overrides) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def make_edit_obj(**overrides) -> SimpleNamespace:
+def make_edit_obj(**overrides: Any) -> SimpleNamespace:
     now = make_timestamp()
     defaults = dict(
         id=1,
@@ -101,7 +102,7 @@ def make_tag_obj(id: int = 1, name: str = "test-tag") -> SimpleNamespace:
     return SimpleNamespace(id=id, name=name)
 
 
-def make_alternate_name_obj(**overrides) -> SimpleNamespace:
+def make_alternate_name_obj(**overrides: Any) -> SimpleNamespace:
     defaults = dict(
         id=1,
         alternate_name="Alternate Name",

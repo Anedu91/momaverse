@@ -1,17 +1,15 @@
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
-
 from api.schemas.website import (
     WebsiteCreate,
     WebsiteDetailResponse,
     WebsiteResponse,
     WebsiteUpdate,
 )
+from pydantic import ValidationError
 
 from tests.schemas.helpers import make_location_obj, make_tag_obj, make_website_obj
-
 
 # ---------------------------------------------------------------------------
 # WebsiteCreate
@@ -37,7 +35,7 @@ def test_create_valid_full():
 
 def test_create_name_required():
     with pytest.raises(ValidationError):
-        WebsiteCreate()
+        WebsiteCreate()  # type: ignore[call-arg]
 
 
 def test_create_name_max_length():

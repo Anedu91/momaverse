@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from api.schemas.edit import EditResponse
+from pydantic import ValidationError
 
 from tests.schemas.helpers import make_edit_obj
 
@@ -46,6 +45,7 @@ def test_response_field_name_max_length():
 def test_response_field_name_at_max_length():
     obj = make_edit_obj(field_name="x" * 100)
     resp = EditResponse.model_validate(obj, from_attributes=True)
+    assert resp.field_name is not None
     assert len(resp.field_name) == 100
 
 

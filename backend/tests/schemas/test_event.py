@@ -2,8 +2,6 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
-from pydantic import ValidationError
-
 from api.schemas.event import (
     EventCreate,
     EventDetailResponse,
@@ -11,9 +9,9 @@ from api.schemas.event import (
     EventUpdate,
     OccurrenceSchema,
 )
+from pydantic import ValidationError
 
 from tests.schemas.helpers import make_event_obj, make_tag_obj
-
 
 # ---------------------------------------------------------------------------
 # OccurrenceSchema
@@ -28,7 +26,7 @@ def test_occurrence_valid():
 
 def test_occurrence_start_date_required():
     with pytest.raises(ValidationError):
-        OccurrenceSchema()
+        OccurrenceSchema()  # type: ignore[call-arg]
 
 
 # ---------------------------------------------------------------------------
@@ -48,9 +46,7 @@ def test_create_valid_full():
         short_name="Art",
         emoji="🎨",
         location_name="Gallery",
-        occurrences=[
-            OccurrenceSchema(start_date=date(2026, 4, 1), start_time="18:00")
-        ],
+        occurrences=[OccurrenceSchema(start_date=date(2026, 4, 1), start_time="18:00")],
         urls=["https://example.com"],
         tags=["art"],
     )
@@ -59,7 +55,7 @@ def test_create_valid_full():
 
 def test_create_name_required():
     with pytest.raises(ValidationError):
-        EventCreate()
+        EventCreate()  # type: ignore[call-arg]
 
 
 def test_create_name_max_length():
@@ -151,8 +147,12 @@ def test_detail_multiple_tags():
 
 def test_detail_with_occurrences():
     occ = SimpleNamespace(
-        id=1, start_date=date(2026, 4, 1), start_time="18:00",
-        end_date=None, end_time=None, sort_order=0,
+        id=1,
+        start_date=date(2026, 4, 1),
+        start_time="18:00",
+        end_date=None,
+        end_time=None,
+        sort_order=0,
     )
     obj = make_event_obj(occurrences=[occ], urls=[], tags=[])
     resp = EventDetailResponse.model_validate(obj, from_attributes=True)

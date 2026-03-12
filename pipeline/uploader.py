@@ -11,6 +11,7 @@ import os
 import sys
 from ftplib import FTP, FTP_TLS
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,12 +31,12 @@ def upload(remote_dir=None, use_tls=False):
     load_dotenv()
 
     # Local directory containing the data files
-    local_dir = os.path.join(SCRIPT_DIR, '..', 'src', 'data')
+    local_dir = os.path.join(SCRIPT_DIR, "..", "src", "data")
 
-    ftp_host = os.getenv('FTP_HOST')
-    ftp_user = os.getenv('FTP_USER')
-    ftp_password = os.getenv('FTP_PASSWORD')
-    ftp_remote_dir = remote_dir or os.getenv('FTP_REMOTE_DIR', '')
+    ftp_host = os.getenv("FTP_HOST")
+    ftp_user = os.getenv("FTP_USER")
+    ftp_password = os.getenv("FTP_PASSWORD")
+    ftp_remote_dir = remote_dir or os.getenv("FTP_REMOTE_DIR", "")
 
     if not all([ftp_host, ftp_user, ftp_password]):
         print("\nError: FTP credentials not found in .env file.")
@@ -79,7 +80,9 @@ def upload(remote_dir=None, use_tls=False):
             return False
 
         # Only upload events*.json and locations*.json files
-        json_files = list(local_path.glob('events*.json')) + list(local_path.glob('locations*.json'))
+        json_files = list(local_path.glob("events*.json")) + list(
+            local_path.glob("locations*.json")
+        )
 
         if not json_files:
             print(f"Warning: No event or location JSON files found in '{local_dir}'")
@@ -92,10 +95,10 @@ def upload(remote_dir=None, use_tls=False):
         for json_file in json_files:
             try:
                 filename = json_file.name
-                print(f"  - Uploading {filename}...", end=' ')
+                print(f"  - Uploading {filename}...", end=" ")
 
-                with open(json_file, 'rb') as file:
-                    ftp.storbinary(f'STOR {filename}', file)
+                with open(json_file, "rb") as file:
+                    ftp.storbinary(f"STOR {filename}", file)
 
                 print("✓")
                 uploaded_count += 1

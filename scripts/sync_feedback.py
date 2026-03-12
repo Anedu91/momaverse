@@ -22,9 +22,8 @@ Environment variables (in .env):
 """
 
 import os
-import sys
 import subprocess
-import tempfile
+import sys
 from pathlib import Path
 
 # Add project root to path for .env loading
@@ -32,46 +31,43 @@ PROJECT_ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from dotenv import load_dotenv
-load_dotenv(PROJECT_ROOT / '.env')
+
+load_dotenv(PROJECT_ROOT / ".env")
 
 # SSH Configuration
-SSH_HOST = os.getenv('SSH_HOST', '')
-SSH_USER = os.getenv('SSH_USER', '')
-SSH_PORT = os.getenv('SSH_PORT', '21098')  # Namecheap default SSH port
-SSH_KEY = os.getenv('SSH_KEY', '')  # Path to SSH private key (relative to project root)
+SSH_HOST = os.getenv("SSH_HOST", "")
+SSH_USER = os.getenv("SSH_USER", "")
+SSH_PORT = os.getenv("SSH_PORT", "21098")  # Namecheap default SSH port
+SSH_KEY = os.getenv("SSH_KEY", "")  # Path to SSH private key (relative to project root)
 
 # Production database (remote)
 PROD_DB = {
-    'name': os.getenv('PROD_DB_NAME', 'fomoowsq_fomo'),
-    'user': os.getenv('PROD_DB_USER', 'fomoowsq_root'),
-    'password': os.getenv('PROD_DB_PASS', ''),
+    "name": os.getenv("PROD_DB_NAME", "fomoowsq_fomo"),
+    "user": os.getenv("PROD_DB_USER", "fomoowsq_root"),
+    "password": os.getenv("PROD_DB_PASS", ""),
 }
 
 # Local database (XAMPP)
 LOCAL_DB = {
-    'host': 'localhost',
-    'name': 'fomo',
-    'user': 'root',
-    'password': '',
+    "host": "localhost",
+    "name": "fomo",
+    "user": "root",
+    "password": "",
 }
 
 # Path to mysql executable (XAMPP on Windows)
-MYSQL_PATH = os.getenv('MYSQL_PATH', r'C:\xampp\mysql\bin\mysql.exe')
+MYSQL_PATH = os.getenv("MYSQL_PATH", r"C:\xampp\mysql\bin\mysql.exe")
 
 
 def run_command(cmd, capture_output=True, input_data=None):
     """Run a command and return output."""
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=capture_output,
-            text=True,
-            input=input_data,
-            shell=True
+            cmd, capture_output=capture_output, text=True, input=input_data, shell=True
         )
         return result.returncode == 0, result.stdout, result.stderr
     except Exception as e:
-        return False, '', str(e)
+        return False, "", str(e)
 
 
 def dump_remote_feedback():
@@ -85,7 +81,7 @@ def dump_remote_feedback():
     )
 
     # SSH command with optional key file
-    ssh_opts = f'-p {SSH_PORT}'
+    ssh_opts = f"-p {SSH_PORT}"
     if SSH_KEY:
         key_path = PROJECT_ROOT / SSH_KEY
         ssh_opts += f' -i "{key_path}"'
@@ -111,28 +107,30 @@ def import_to_local(sql_data):
     print("Importing to local database...")
 
     # Filter out mysqldump warnings and MariaDB-specific lines from the SQL data
-    lines = sql_data.split('\n')
+    lines = sql_data.split("\n")
     filtered_lines = []
     for line in lines:
         # Skip mysqldump warnings
-        if line.startswith('mysqldump: [Warning]') or line.startswith('mysqldump:'):
+        if line.startswith("mysqldump: [Warning]") or line.startswith("mysqldump:"):
             continue
         # Skip MariaDB sandbox mode line (causes "Unknown command '\-'" error in MySQL)
-        if 'enable the sandbox mode' in line:
+        if "enable the sandbox mode" in line:
             continue
         filtered_lines.append(line)
-    sql_data = '\n'.join(filtered_lines)
+    sql_data = "\n".join(filtered_lines)
 
     # Write SQL to temp file (more reliable on Windows than piping)
-    temp_file = PROJECT_ROOT / 'scripts' / 'temp_feedback.sql'
+    temp_file = PROJECT_ROOT / "scripts" / "temp_feedback.sql"
     try:
-        with open(temp_file, 'w', encoding='utf-8') as f:
+        with open(temp_file, "w", encoding="utf-8") as f:
             f.write(sql_data)
 
         # Build mysql import command
-        mysql_cmd = f'"{MYSQL_PATH}" -u {LOCAL_DB["user"]} {LOCAL_DB["name"]} < "{temp_file}"'
+        mysql_cmd = (
+            f'"{MYSQL_PATH}" -u {LOCAL_DB["user"]} {LOCAL_DB["name"]} < "{temp_file}"'
+        )
 
-        if LOCAL_DB['password']:
+        if LOCAL_DB["password"]:
             mysql_cmd = f'"{MYSQL_PATH}" -u {LOCAL_DB["user"]} -p{LOCAL_DB["password"]} {LOCAL_DB["name"]} < "{temp_file}"'
 
         success, stdout, stderr = run_command(mysql_cmd)
@@ -156,10 +154,10 @@ def count_local_feedback():
     success, stdout, stderr = run_command(mysql_cmd)
 
     if success:
-        lines = stdout.strip().split('\n')
+        lines = stdout.strip().split("\n")
         if len(lines) > 1:
             return lines[1].strip()
-    return '?'
+    return "?"
 
 
 def main():
@@ -175,7 +173,7 @@ def main():
         print("  PROD_DB_PASS=your_password")
         sys.exit(1)
 
-    if not PROD_DB['password']:
+    if not PROD_DB["password"]:
         print("Error: PROD_DB_PASS must be set in .env")
         sys.exit(1)
 
@@ -198,5 +196,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

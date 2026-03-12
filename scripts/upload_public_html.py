@@ -25,19 +25,19 @@ import os
 import sys
 from ftplib import FTP, FTP_TLS
 from pathlib import Path
-from dotenv import load_dotenv
 
+from dotenv import load_dotenv
 
 # Get the directory where this script is located
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-STATE_FILE = os.path.join(SCRIPT_DIR, 'upload_state.json')
+STATE_FILE = os.path.join(SCRIPT_DIR, "upload_state.json")
 
 
 def get_file_hash(file_path):
     """Get MD5 hash of file contents."""
     h = hashlib.md5()
-    with open(file_path, 'rb') as f:
-        for chunk in iter(lambda: f.read(8192), b''):
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
             h.update(chunk)
     return h.hexdigest()
 
@@ -53,14 +53,14 @@ def ensure_remote_directory(ftp, remote_path):
     if not remote_path:
         return
 
-    parts = remote_path.strip('/').split('/')
-    current_path = ''
+    parts = remote_path.strip("/").split("/")
+    current_path = ""
 
     for part in parts:
         current_path = f"{current_path}/{part}" if current_path else part
         try:
             ftp.cwd(f"/{current_path}")
-        except:
+        except Exception:
             try:
                 ftp.mkd(f"/{current_path}")
                 print(f"  Created directory: {current_path}")
@@ -68,8 +68,15 @@ def ensure_remote_directory(ftp, remote_path):
                 print(f"  Warning: Could not create directory '{current_path}': {e}")
 
 
-def upload_directory(ftp, local_dir, remote_dir, is_root=True,
-                     previous_state=None, new_state=None, force=False):
+def upload_directory(
+    ftp,
+    local_dir,
+    remote_dir,
+    is_root=True,
+    previous_state=None,
+    new_state=None,
+    force=False,
+):
     """
     Recursively upload directory contents to FTP server.
     Skips symlinks (dev mode artifacts).
@@ -136,10 +143,10 @@ def upload_directory(ftp, local_dir, remote_dir, is_root=True,
             status = "(new)" if previous_hash is None else "(modified)"
             if force and previous_hash is not None and current_hash == previous_hash:
                 status = "(forced)"
-            print(f"  - Uploading {remote_file_path} {status}...", end=' ', flush=True)
+            print(f"  - Uploading {remote_file_path} {status}...", end=" ", flush=True)
 
-            with open(item, 'rb') as file:
-                ftp.storbinary(f'STOR {filename}', file)
+            with open(item, "rb") as file:
+                ftp.storbinary(f"STOR {filename}", file)
 
             print("✓")
             uploaded_count += 1
@@ -157,17 +164,24 @@ def upload_directory(ftp, local_dir, remote_dir, is_root=True,
         # Ensure remote subdirectory exists
         try:
             ftp.cwd(f"/{new_remote_dir}")
-        except:
+        except Exception:
             try:
                 ftp.mkd(f"/{new_remote_dir}")
                 print(f"    Created remote directory: {new_remote_dir}")
             except Exception as e:
-                print(f"    Warning: Could not create directory '{new_remote_dir}': {e}")
+                print(
+                    f"    Warning: Could not create directory '{new_remote_dir}': {e}"
+                )
 
         # Upload subdirectory contents
         sub_uploaded, sub_skipped, sub_total = upload_directory(
-            ftp, item, new_remote_dir,
-            is_root=False, previous_state=previous_state, new_state=new_state, force=force
+            ftp,
+            item,
+            new_remote_dir,
+            is_root=False,
+            previous_state=previous_state,
+            new_state=new_state,
+            force=force,
         )
         uploaded_count += sub_uploaded
         skipped_count += sub_skipped
@@ -178,7 +192,9 @@ def upload_directory(ftp, local_dir, remote_dir, is_root=True,
             try:
                 ftp.cwd(f"/{remote_dir}")
             except Exception as e:
-                print(f"  Warning: Could not change back to directory '{remote_dir}': {e}")
+                print(
+                    f"  Warning: Could not change back to directory '{remote_dir}': {e}"
+                )
 
     return uploaded_count, skipped_count, total_count
 
@@ -197,25 +213,27 @@ def main(remote_dir=None, use_tls=False, force=False):
     """
     load_dotenv()
 
-    local_dir = os.path.join(SCRIPT_DIR, '..', 'dist')
+    local_dir = os.path.join(SCRIPT_DIR, "..", "dist")
 
-    ftp_host = os.getenv('FTP_HOST')
-    ftp_user = os.getenv('PUBLIC_HTML_FTP_USER')
-    ftp_password = os.getenv('FTP_PASSWORD')
-    ftp_remote_dir = remote_dir or os.getenv('FTP_REMOTE_DIR', '')
+    ftp_host = os.getenv("FTP_HOST")
+    ftp_user = os.getenv("PUBLIC_HTML_FTP_USER")
+    ftp_password = os.getenv("FTP_PASSWORD")
+    ftp_remote_dir = remote_dir or os.getenv("FTP_REMOTE_DIR", "")
 
     if not all([ftp_host, ftp_user, ftp_password]):
         print("\nError: FTP credentials not found in .env file.")
-        print("Please set FTP_HOST, PUBLIC_HTML_FTP_USER, and FTP_PASSWORD in your .env file.")
+        print(
+            "Please set FTP_HOST, PUBLIC_HTML_FTP_USER, and FTP_PASSWORD in your .env file."
+        )
         return False
 
     # Load previous upload state
     previous_state = {}
     if os.path.exists(STATE_FILE):
         try:
-            with open(STATE_FILE, 'r') as f:
+            with open(STATE_FILE, "r") as f:
                 previous_state = json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except json.JSONDecodeError, IOError:
             pass
     new_state = {}
 
@@ -263,13 +281,15 @@ def main(remote_dir=None, use_tls=False, force=False):
             is_root=True,
             previous_state=previous_state,
             new_state=new_state,
-            force=force
+            force=force,
         )
 
-        print(f"\nUploaded {uploaded_count} files, skipped {skipped_count} unchanged files ({total_count} total)")
+        print(
+            f"\nUploaded {uploaded_count} files, skipped {skipped_count} unchanged files ({total_count} total)"
+        )
 
         # Save the new state
-        with open(STATE_FILE, 'w') as f:
+        with open(STATE_FILE, "w") as f:
             json.dump(new_state, f, indent=2, sort_keys=True)
         print(f"Saved upload state to {STATE_FILE}")
 
@@ -289,18 +309,19 @@ if __name__ == "__main__":
         description="Upload dist/ build output to FTP server (smart upload - only changed files)"
     )
     parser.add_argument(
-        '--force', '-f',
-        action='store_true',
-        help='Force upload all files, ignoring content hashes'
+        "--force",
+        "-f",
+        action="store_true",
+        help="Force upload all files, ignoring content hashes",
     )
     parser.add_argument(
-        '--tls',
-        action='store_true',
-        help='Use FTPS (FTP over TLS) instead of plain FTP'
+        "--tls",
+        action="store_true",
+        help="Use FTPS (FTP over TLS) instead of plain FTP",
     )
     parser.add_argument(
-        '--remote-dir',
-        help='Remote directory on FTP server (overrides FTP_REMOTE_DIR env var)'
+        "--remote-dir",
+        help="Remote directory on FTP server (overrides FTP_REMOTE_DIR env var)",
     )
 
     args = parser.parse_args()

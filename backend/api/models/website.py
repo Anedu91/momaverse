@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -42,7 +43,9 @@ class Website(TimestampMixin, Base):
     force_crawl: Mapped[bool] = mapped_column(Boolean, server_default="false")
     last_crawled_at: Mapped[datetime | None] = mapped_column()
     delay_before_return_html: Mapped[int | None] = mapped_column(Integer)
-    content_filter_threshold: Mapped[float | None] = mapped_column(Numeric(3, 2, asdecimal=False))
+    content_filter_threshold: Mapped[float | None] = mapped_column(
+        Numeric(3, 2, asdecimal=False)
+    )
     scan_full_page: Mapped[bool | None] = mapped_column(Boolean)
     remove_overlay_elements: Mapped[bool | None] = mapped_column(Boolean)
     javascript_enabled: Mapped[bool | None] = mapped_column(Boolean)
@@ -59,7 +62,7 @@ class Website(TimestampMixin, Base):
         Enum(CrawlMode, name="crawl_mode", create_type=False),
         server_default="browser",
     )
-    json_api_config: Mapped[dict | None] = mapped_column(JSONB)
+    json_api_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
 
     # Relationships
     urls: Mapped[list["WebsiteUrl"]] = relationship(back_populates="website")
@@ -71,9 +74,7 @@ class Website(TimestampMixin, Base):
         secondary="website_instagram", back_populates="websites"
     )
     events: Mapped[list["Event"]] = relationship(back_populates="website")
-    crawl_results: Mapped[list["CrawlResult"]] = relationship(
-        back_populates="website"
-    )
+    crawl_results: Mapped[list["CrawlResult"]] = relationship(back_populates="website")
     grantees: Mapped[list["Grantee"]] = relationship(back_populates="website")
 
 
@@ -117,9 +118,7 @@ class WebsiteTag(Base):
     website_id: Mapped[int] = mapped_column(
         ForeignKey("websites.id", ondelete="CASCADE")
     )
-    tag_id: Mapped[int] = mapped_column(
-        ForeignKey("tags.id", ondelete="CASCADE")
-    )
+    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
 
 
 class WebsiteInstagram(Base):

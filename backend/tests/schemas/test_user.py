@@ -1,10 +1,8 @@
 import pytest
+from api.schemas.user import UserCreate, UserLogin, UserResponse
 from pydantic import ValidationError
 
-from api.schemas.user import UserCreate, UserLogin, UserResponse
-
 from tests.schemas.helpers import make_user_obj
-
 
 # ---------------------------------------------------------------------------
 # UserCreate
@@ -27,7 +25,7 @@ def test_create_with_display_name():
 
 def test_create_email_required():
     with pytest.raises(ValidationError):
-        UserCreate(password="securepass123")
+        UserCreate(password="securepass123")  # type: ignore[call-arg]
 
 
 def test_create_invalid_email():

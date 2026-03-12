@@ -22,26 +22,26 @@ except ImportError:
 
 # Database Configuration
 DB_CONFIG = {
-    'local': {
-        'host': 'localhost',
-        'dbname': 'momaverse',
-        'user': os.environ.get('USER', 'postgres'),
-        'password': ''
+    "local": {
+        "host": "localhost",
+        "dbname": "momaverse",
+        "user": os.environ.get("USER", "postgres"),
+        "password": "",
     },
-    'production': {
-        'host': 'localhost',
-        'dbname': os.environ.get('PROD_DB_NAME', 'momaverse'),
-        'user': os.environ.get('PROD_DB_USER', 'momaverse'),
-        'password': os.environ.get('PROD_DB_PASS', '')
-    }
+    "production": {
+        "host": "localhost",
+        "dbname": os.environ.get("PROD_DB_NAME", "momaverse"),
+        "user": os.environ.get("PROD_DB_USER", "momaverse"),
+        "password": os.environ.get("PROD_DB_PASS", ""),
+    },
 }
 
 
 def get_db_config():
     """Get database config based on environment."""
-    env = os.environ.get('FOMO_ENV', 'local')
+    env = os.environ.get("FOMO_ENV", "local")
     if env not in DB_CONFIG:
-        env = 'local'
+        env = "local"
     return DB_CONFIG[env]
 
 
@@ -50,10 +50,10 @@ def create_connection():
     config = get_db_config()
     try:
         conn = psycopg2.connect(
-            host=config['host'],
-            dbname=config['dbname'],
-            user=config['user'],
-            password=config['password']
+            host=config["host"],
+            dbname=config["dbname"],
+            user=config["user"],
+            password=config["password"],
         )
         conn.autocommit = False
         return conn
@@ -65,11 +65,11 @@ def create_connection():
 def _parse_url_data(url_string):
     """Parse URL data from concatenated format 'url:::js_code|||url:::js_code|||...'"""
     urls = []
-    for item in url_string.split('|||'):
-        parts = item.split(':::', 1)
+    for item in url_string.split("|||"):
+        parts = item.split(":::", 1)
         url = parts[0]
         js_code = parts[1] if len(parts) > 1 and parts[1] else None
-        urls.append({'url': url, 'js_code': js_code})
+        urls.append({"url": url, "js_code": js_code})
     return urls
 
 
@@ -90,8 +90,9 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
     """
     if website_ids:
         # When specific IDs are provided, ignore crawl_frequency
-        placeholders = ','.join(['%s'] * len(website_ids))
-        cursor.execute(f"""
+        placeholders = ",".join(["%s"] * len(website_ids))
+        cursor.execute(
+            f"""
             SELECT w.id, w.name, w.crawl_frequency, w.selector, w.num_clicks,
                    w.keywords, w.max_pages, w.max_batches, w.notes,
                    w.delay_before_return_html, w.content_filter_threshold, w.scan_full_page,
@@ -105,7 +106,9 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
             GROUP BY w.id
             HAVING STRING_AGG(wu.url, '') IS NOT NULL OR w.crawl_mode = 'json_api'
             ORDER BY w.id ASC
-        """, website_ids)
+        """,
+            website_ids,
+        )
     else:
         cursor.execute("""
             SELECT w.id, w.name, w.crawl_frequency, w.selector, w.num_clicks,
@@ -130,30 +133,32 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
     websites = []
     for row in cursor.fetchall():
         website = {
-            'id': row[0],
-            'name': row[1],
-            'crawl_frequency': row[2] or 7,
-            'selector': row[3],
-            'num_clicks': row[4] or 2,
-            'keywords': row[5],
-            'max_pages': row[6] or 30,
-            'max_batches': row[7],
-            'notes': row[8],
-            'delay_before_return_html': row[9],
-            'content_filter_threshold': row[10],
-            'scan_full_page': row[11],
-            'remove_overlay_elements': row[12],
-            'javascript_enabled': row[13],
-            'text_mode': row[14],
-            'light_mode': row[15],
-            'use_stealth': row[16],
-            'scroll_delay': float(row[17]) if row[17] is not None else None,
-            'crawl_timeout': row[18],
-            'process_images': row[19],
-            'base_url': row[20],
-            'crawl_mode': row[21] or 'browser',
-            'json_api_config': row[22] if isinstance(row[22], dict) else (json.loads(row[22]) if row[22] else {}),
-            'urls': _parse_url_data(row[23]) if row[23] else []
+            "id": row[0],
+            "name": row[1],
+            "crawl_frequency": row[2] or 7,
+            "selector": row[3],
+            "num_clicks": row[4] or 2,
+            "keywords": row[5],
+            "max_pages": row[6] or 30,
+            "max_batches": row[7],
+            "notes": row[8],
+            "delay_before_return_html": row[9],
+            "content_filter_threshold": row[10],
+            "scan_full_page": row[11],
+            "remove_overlay_elements": row[12],
+            "javascript_enabled": row[13],
+            "text_mode": row[14],
+            "light_mode": row[15],
+            "use_stealth": row[16],
+            "scroll_delay": float(row[17]) if row[17] is not None else None,
+            "crawl_timeout": row[18],
+            "process_images": row[19],
+            "base_url": row[20],
+            "crawl_mode": row[21] or "browser",
+            "json_api_config": row[22]
+            if isinstance(row[22], dict)
+            else (json.loads(row[22]) if row[22] else {}),
+            "urls": _parse_url_data(row[23]) if row[23] else [],
         }
         websites.append(website)
 
@@ -169,7 +174,7 @@ def get_or_create_crawl_run(cursor, connection, run_date):
 
     cursor.execute(
         "INSERT INTO crawl_runs (run_date, status, started_at) VALUES (%s, 'running', NOW()) RETURNING id",
-        (run_date,)
+        (run_date,),
     )
     new_id = cursor.fetchone()[0]
     connection.commit()
@@ -183,7 +188,7 @@ def create_crawl_result(cursor, connection, crawl_run_id, website_id, filename):
            VALUES (%s, %s, %s, 'pending', NOW())
            ON CONFLICT (crawl_run_id, filename) DO UPDATE SET status = 'pending'
            RETURNING id""",
-        (crawl_run_id, website_id, filename)
+        (crawl_run_id, website_id, filename),
     )
     new_id = cursor.fetchone()[0]
     connection.commit()
@@ -206,64 +211,69 @@ def update_crawl_result(cursor, connection, crawl_result_id, status, **kwargs):
 
     # Map status to timestamp field
     timestamp_map = {
-        'crawled': 'crawled_at',
-        'extracted': 'extracted_at',
-        'processed': 'processed_at'
+        "crawled": "crawled_at",
+        "extracted": "extracted_at",
+        "processed": "processed_at",
     }
     if status in timestamp_map:
         updates.append(f"{timestamp_map[status]} = NOW()")
 
     # Handle optional fields
-    if 'content' in kwargs:
-        if status == 'crawled':
+    if "content" in kwargs:
+        if status == "crawled":
             updates.append("crawled_content = %s")
-        elif status == 'extracted':
+        elif status == "extracted":
             updates.append("extracted_content = %s")
-        params.append(kwargs['content'])
+        params.append(kwargs["content"])
 
-    if 'event_count' in kwargs:
+    if "event_count" in kwargs:
         updates.append("event_count = %s")
-        params.append(kwargs['event_count'])
+        params.append(kwargs["event_count"])
 
-    if 'error_message' in kwargs:
+    if "error_message" in kwargs:
         updates.append("error_message = %s")
-        error_msg = kwargs['error_message']
+        error_msg = kwargs["error_message"]
         params.append(error_msg[:65535] if error_msg else None)
 
     params.append(crawl_result_id)
 
     cursor.execute(
-        f"UPDATE crawl_results SET {', '.join(updates)} WHERE id = %s",
-        tuple(params)
+        f"UPDATE crawl_results SET {', '.join(updates)} WHERE id = %s", tuple(params)
     )
     connection.commit()
 
 
 def update_crawl_result_crawled(cursor, connection, crawl_result_id, content):
     """Update crawl result with crawled content."""
-    update_crawl_result(cursor, connection, crawl_result_id, 'crawled', content=content)
+    update_crawl_result(cursor, connection, crawl_result_id, "crawled", content=content)
 
 
 def update_crawl_result_extracted(cursor, connection, crawl_result_id, content):
     """Update crawl result with extracted content."""
-    update_crawl_result(cursor, connection, crawl_result_id, 'extracted', content=content)
+    update_crawl_result(
+        cursor, connection, crawl_result_id, "extracted", content=content
+    )
 
 
 def update_crawl_result_processed(cursor, connection, crawl_result_id, event_count):
     """Update crawl result as processed."""
-    update_crawl_result(cursor, connection, crawl_result_id, 'processed', event_count=event_count)
+    update_crawl_result(
+        cursor, connection, crawl_result_id, "processed", event_count=event_count
+    )
 
 
 def update_crawl_result_failed(cursor, connection, crawl_result_id, error_message):
     """Update crawl result as failed."""
-    update_crawl_result(cursor, connection, crawl_result_id, 'failed', error_message=error_message)
+    update_crawl_result(
+        cursor, connection, crawl_result_id, "failed", error_message=error_message
+    )
 
 
 def update_website_last_crawled(cursor, connection, website_id):
     """Update the last_crawled_at timestamp for a website and reset force_crawl flag."""
     cursor.execute(
         "UPDATE websites SET last_crawled_at = NOW(), force_crawl = FALSE WHERE id = %s",
-        (website_id,)
+        (website_id,),
     )
     connection.commit()
 
@@ -272,7 +282,7 @@ def complete_crawl_run(cursor, connection, crawl_run_id):
     """Mark a crawl run as completed."""
     cursor.execute(
         "UPDATE crawl_runs SET status = 'completed', completed_at = NOW() WHERE id = %s",
-        (crawl_run_id,)
+        (crawl_run_id,),
     )
     connection.commit()
 
@@ -310,16 +320,18 @@ def get_incomplete_crawl_results(cursor):
 
     results = []
     for row in cursor.fetchall():
-        results.append({
-            'crawl_result_id': row[0],
-            'status': row[7],  # Use effective_status for processing
-            'original_status': row[1],
-            'website_id': row[2],
-            'crawl_run_id': row[3],
-            'name': row[4],
-            'notes': row[5],
-            'run_date': row[6]
-        })
+        results.append(
+            {
+                "crawl_result_id": row[0],
+                "status": row[7],  # Use effective_status for processing
+                "original_status": row[1],
+                "website_id": row[2],
+                "crawl_run_id": row[3],
+                "name": row[4],
+                "notes": row[5],
+                "run_date": row[6],
+            }
+        )
 
     return results
 
@@ -327,8 +339,7 @@ def get_incomplete_crawl_results(cursor):
 def get_crawled_content(cursor, crawl_result_id):
     """Get crawled content for a crawl result."""
     cursor.execute(
-        "SELECT crawled_content FROM crawl_results WHERE id = %s",
-        (crawl_result_id,)
+        "SELECT crawled_content FROM crawl_results WHERE id = %s", (crawl_result_id,)
     )
     result = cursor.fetchone()
     return result[0] if result else None
@@ -341,7 +352,8 @@ def get_existing_upcoming_events(cursor, website_id):
     Returns active (non-archived) events with occurrences from today onwards,
     formatted as JSON-compatible dicts.
     """
-    cursor.execute("""
+    cursor.execute(
+        """
         SELECT
             e.id, e.name, e.description,
             l.name as location, e.sublocation,
@@ -369,20 +381,22 @@ def get_existing_upcoming_events(cursor, website_id):
           AND eo.start_date >= CURRENT_DATE
         GROUP BY e.id, e.name, e.description, l.name, e.sublocation, e.emoji
         ORDER BY MIN(eo.start_date)
-    """, (website_id,))
+    """,
+        (website_id,),
+    )
 
     events = []
     for row in cursor.fetchall():
         event = {
-            'id': row[0],
-            'name': row[1],
-            'description': row[2],
-            'location': row[3],
-            'sublocation': row[4],
-            'occurrences': json.loads(f"[{row[5]}]") if row[5] else [],
-            'urls': row[6].split(',') if row[6] else [],
-            'hashtags': row[7].split(',') if row[7] else [],
-            'emoji': row[8]
+            "id": row[0],
+            "name": row[1],
+            "description": row[2],
+            "location": row[3],
+            "sublocation": row[4],
+            "occurrences": json.loads(f"[{row[5]}]") if row[5] else [],
+            "urls": row[6].split(",") if row[6] else [],
+            "hashtags": row[7].split(",") if row[7] else [],
+            "emoji": row[8],
         }
         events.append(event)
 
@@ -476,7 +490,8 @@ def archive_outdated_events(cursor, connection, website_id):
     """
 
     # First, identify events that will be archived to check for upcoming ones
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         SELECT e.id, e.name,
                (SELECT MIN(eo.start_date)
                 FROM event_occurrences eo
@@ -484,17 +499,26 @@ def archive_outdated_events(cursor, connection, website_id):
                   AND eo.start_date >= CURRENT_DATE) as next_occurrence
         FROM events e
         WHERE {archive_where}
-    """, (website_id,))
+    """,
+        (website_id,),
+    )
 
     events_to_archive = cursor.fetchall()
-    upcoming_events = [(event_id, name, next_occ) for event_id, name, next_occ in events_to_archive if next_occ]
+    upcoming_events = [
+        (event_id, name, next_occ)
+        for event_id, name, next_occ in events_to_archive
+        if next_occ
+    ]
 
     # Perform the actual archiving
-    cursor.execute(f"""
+    cursor.execute(
+        f"""
         UPDATE events e
         SET archived = TRUE
         WHERE {archive_where}
-    """, (website_id,))
+    """,
+        (website_id,),
+    )
 
     archived_count = cursor.rowcount
     connection.commit()
@@ -506,7 +530,7 @@ def get_extracted_content(cursor, crawl_result_id):
     """Get extracted content and website_id for a crawl result."""
     cursor.execute(
         "SELECT extracted_content, website_id FROM crawl_results WHERE id = %s",
-        (crawl_result_id,)
+        (crawl_result_id,),
     )
     result = cursor.fetchone()
     return (result[0], result[1]) if result else (None, None)
@@ -530,15 +554,15 @@ def get_all_locations(cursor):
     locations = {}
     for row in cursor.fetchall():
         locations[row[0]] = {
-            'id': row[0],
-            'name': row[1],
-            'short_name': row[2],
-            'address': row[3],
-            'lat': float(row[4]) if row[4] else None,
-            'lng': float(row[5]) if row[5] else None,
-            'emoji': row[6],
-            'alternate_names': [],
-            'website_scoped_names': {}
+            "id": row[0],
+            "name": row[1],
+            "short_name": row[2],
+            "address": row[3],
+            "lat": float(row[4]) if row[4] else None,
+            "lng": float(row[5]) if row[5] else None,
+            "emoji": row[6],
+            "alternate_names": [],
+            "website_scoped_names": {},
         }
 
     # Get all alternate names (both global and website-scoped)
@@ -551,9 +575,11 @@ def get_all_locations(cursor):
         location_id, alternate_name, website_id = row
         if location_id in locations:
             if website_id is None:
-                locations[location_id]['alternate_names'].append(alternate_name)
+                locations[location_id]["alternate_names"].append(alternate_name)
             else:
-                locations[location_id]['website_scoped_names'].setdefault(website_id, []).append(alternate_name)
+                locations[location_id]["website_scoped_names"].setdefault(
+                    website_id, []
+                ).append(alternate_name)
 
     return list(locations.values())
 
@@ -567,7 +593,7 @@ def get_tag_rules(cursor):
     - 'exclude': list of patterns to filter out
     - 'remove': list of patterns that indicate event should be skipped
     """
-    rules = {'rewrite': {}, 'exclude': [], 'remove': []}
+    rules = {"rewrite": {}, "exclude": [], "remove": []}
 
     cursor.execute("""
         SELECT rule_type, pattern, replacement
@@ -577,12 +603,12 @@ def get_tag_rules(cursor):
 
     for row in cursor.fetchall():
         rule_type, pattern, replacement = row
-        if rule_type == 'rewrite':
-            rules['rewrite'][pattern] = replacement
-        elif rule_type == 'exclude':
-            rules['exclude'].append(pattern)
-        elif rule_type == 'remove':
-            rules['remove'].append(pattern)
+        if rule_type == "rewrite":
+            rules["rewrite"][pattern] = replacement
+        elif rule_type == "exclude":
+            rules["exclude"].append(pattern)
+        elif rule_type == "remove":
+            rules["remove"].append(pattern)
 
     return rules
 
@@ -605,7 +631,7 @@ def get_websites_with_tags(cursor):
     websites_map = {}
     for row in cursor.fetchall():
         url, tag = row
-        normalized_url = url.rstrip('/').lower()
+        normalized_url = url.rstrip("/").lower()
         if normalized_url not in websites_map:
             websites_map[normalized_url] = []
         if tag:
