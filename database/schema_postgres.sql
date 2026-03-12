@@ -134,10 +134,11 @@ CREATE INDEX idx_location_alt_names_website ON location_alternate_names (website
 CREATE TABLE IF NOT EXISTS website_tags (
     id SERIAL PRIMARY KEY,
     website_id INTEGER NOT NULL,
-    tag VARCHAR(100) NOT NULL,
+    tag_id INTEGER NOT NULL,
 
-    UNIQUE (website_id, tag),
-    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE
+    UNIQUE (website_id, tag_id),
+    FOREIGN KEY (website_id) REFERENCES websites(id) ON DELETE CASCADE,
+    FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE
 );
 
 CREATE INDEX idx_website_tags_website ON website_tags (website_id);
