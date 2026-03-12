@@ -44,7 +44,7 @@ class Event(TimestampMixin, Base):
         back_populates="event"
     )
     urls: Mapped[list["EventUrl"]] = relationship(back_populates="event")
-    tags: Mapped[list["EventTag"]] = relationship(back_populates="event")
+    tags: Mapped[list["Tag"]] = relationship(secondary="event_tags", viewonly=True)
     sources: Mapped[list["EventSource"]] = relationship(back_populates="event")
 
 
@@ -90,10 +90,6 @@ class EventTag(Base):
     tag_id: Mapped[int] = mapped_column(
         ForeignKey("tags.id", ondelete="CASCADE")
     )
-
-    # Relationships
-    event: Mapped["Event"] = relationship(back_populates="tags")
-    tag: Mapped["Tag"] = relationship()
 
 
 class EventSource(Base):

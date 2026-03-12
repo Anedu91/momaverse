@@ -23,13 +23,13 @@ class Location(TimestampMixin, Base):
     alternate_names: Mapped[list["LocationAlternateName"]] = relationship(
         back_populates="location"
     )
-    tags: Mapped[list["LocationTag"]] = relationship(back_populates="location")
+    tags: Mapped[list["Tag"]] = relationship(secondary="location_tags", viewonly=True)
     instagram_accounts: Mapped[list["InstagramAccount"]] = relationship(
         secondary="location_instagram", back_populates="locations"
     )
     events: Mapped[list["Event"]] = relationship(back_populates="location")
-    website_locations: Mapped[list["WebsiteLocation"]] = relationship(
-        back_populates="location"
+    websites: Mapped[list["Website"]] = relationship(
+        secondary="website_locations", viewonly=True
     )
 
 
@@ -61,10 +61,6 @@ class LocationTag(Base):
     tag_id: Mapped[int] = mapped_column(
         ForeignKey("tags.id", ondelete="CASCADE")
     )
-
-    # Relationships
-    location: Mapped["Location"] = relationship(back_populates="tags")
-    tag: Mapped["Tag"] = relationship()
 
 
 class LocationInstagram(Base):

@@ -63,10 +63,10 @@ class Website(TimestampMixin, Base):
 
     # Relationships
     urls: Mapped[list["WebsiteUrl"]] = relationship(back_populates="website")
-    website_locations: Mapped[list["WebsiteLocation"]] = relationship(
-        back_populates="website"
+    locations: Mapped[list["Location"]] = relationship(
+        secondary="website_locations", viewonly=True
     )
-    tags: Mapped[list["WebsiteTag"]] = relationship(back_populates="website")
+    tags: Mapped[list["Tag"]] = relationship(secondary="website_tags", viewonly=True)
     instagram_accounts: Mapped[list["InstagramAccount"]] = relationship(
         secondary="website_instagram", back_populates="websites"
     )
@@ -105,22 +105,21 @@ class WebsiteLocation(Base):
     )
 
     # Relationships
-    website: Mapped["Website"] = relationship(back_populates="website_locations")
-    location: Mapped["Location"] = relationship(back_populates="website_locations")
+    website: Mapped["Website"] = relationship(viewonly=True)
+    location: Mapped["Location"] = relationship(viewonly=True)
 
 
 class WebsiteTag(Base):
     __tablename__ = "website_tags"
-    __table_args__ = (UniqueConstraint("website_id", "tag"),)
+    __table_args__ = (UniqueConstraint("website_id", "tag_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     website_id: Mapped[int] = mapped_column(
         ForeignKey("websites.id", ondelete="CASCADE")
     )
-    tag: Mapped[str] = mapped_column(String(100))
-
-    # Relationships
-    website: Mapped["Website"] = relationship(back_populates="tags")
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE")
+    )
 
 
 class WebsiteInstagram(Base):
