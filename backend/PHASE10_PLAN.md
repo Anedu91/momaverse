@@ -39,86 +39,67 @@ These are problems we hit before and must avoid this time:
 
 ## Steps
 
-### Step 1: Move pipeline files into `backend/pipeline/`
+### Step 1: Move pipeline files into `backend/pipeline/` --- DONE
 
-**What to do:**
-- Copy these files from `../pipeline/` into `backend/pipeline/`:
-  - `main.py`, `db.py`, `crawler.py`, `extractor.py`, `processor.py`
-  - `merger.py`, `frequency_analyzer.py`, `location_resolver.py`
-- Copy test files: `../pipeline/tests/test_merger.py`, `../pipeline/tests/test_processor.py`
-  into `backend/pipeline/tests/`
-- Do NOT copy: `venv/`, `__pycache__/`, `exporter.py`, `uploader.py`
-- Create `backend/pipeline/__init__.py`, `backend/pipeline/tests/__init__.py`
-- Update imports in all moved files (e.g., `from pipeline import db`)
-- **Make top-level imports lazy** for `db`, `regex`, `crawl4ai` in modules that have
-  pure-logic functions used by tests (`merger.py`, `processor.py`)
-- Add `regex` to dev dependencies: `uv add --group dev regex`
-
-**Verify:**
-- `cd backend && uv run python -c "import pipeline"` works
-- `cd backend && uv run pytest pipeline/tests/ -v` — existing pure-logic tests pass
-- `cd backend && uv run pytest tests/ -v` — existing backend tests still pass
+- Copied files from `../pipeline/` into `backend/pipeline/`:
+  `main.py`, `db.py`, `crawler.py`, `extractor.py`, `processor.py`,
+  `merger.py`, `frequency_analyzer.py`, `location_resolver.py`
+- Created `backend/pipeline/__init__.py`
+- Updated imports, made top-level imports lazy for `db`, `regex`, `crawl4ai`
 
 ---
 
-### Step 2: Remove exporter and uploader references
+### Step 2: Remove exporter and uploader references --- DONE
 
-**What to do:**
-- Remove import/usage of `exporter` and `uploader` from `backend/pipeline/main.py`
-- Remove Steps 6 (Export) and 7 (Upload) from the pipeline orchestrator
-- Do NOT delete `../pipeline/exporter.py` or `../pipeline/uploader.py` yet (Step 9)
-
-**Verify:**
-- `cd backend && uv run pytest -v` passes
+- Removed import/usage of `exporter` and `uploader` from `backend/pipeline/main.py`
+- Removed Steps 6 (Export) and 7 (Upload) from the pipeline orchestrator
 
 ---
 
-### Step 3: Decouple crawler.py and extractor.py from DB
+### Step 3: Decouple crawler.py and extractor.py from DB --- DONE
 
-**What to do:**
-
-`crawler.py`:
-- Remove `import db` / `from pipeline import db`
-- Add `CrawlError` exception class
-- `crawl_website()`: return `(content, filename)` instead of persisting to DB
-- `crawl_json_api()`: return `(content, raw_data, filename)` instead of persisting to DB
-
-`extractor.py`:
-- Remove `import db` / `from pipeline import db`
-- Add `ExtractionError` exception class
-- `extract_events()`: accept `page_content` as parameter, return JSON string
-- Accept `existing_events` as parameter instead of querying DB
-
-**Verify:**
-- `grep -r "import db" backend/pipeline/crawler.py backend/pipeline/extractor.py` returns nothing
-- `cd backend && uv run pytest -v` passes
+- `crawler.py`: removed DB imports, added `CrawlError`, returns data instead of persisting
+- `extractor.py`: removed DB imports, added `ExtractionError`, accepts params instead of querying DB
 
 ---
 
-### Step 4: Add pipeline dependencies to pyproject.toml
+### Step 4: Add pipeline dependencies to pyproject.toml --- DONE
 
-**What to do:**
-- Add a `pipeline` dependency group in `pyproject.toml`:
-  ```toml
-  pipeline = [
-      "crawl4ai>=0.8.0",
-      "google-genai>=1.65.0",
-      "python-dotenv>=1.2.2",
-      "httpx>=0.28.1",
-      "Pillow>=12.1.1",
-      "regex>=2026.2.28",
-      "psycopg2-binary>=2.9.10",
-  ]
-  ```
-- Add under the existing `[dependency-groups]` section (don't create a duplicate header)
-
-**Verify:**
-- `cd backend && uv sync` succeeds
-- `cd backend && uv run pytest -v` passes
+- Added `pipeline` dependency group in `pyproject.toml`
 
 ---
 
-### Step 5: Create pipeline database session factory
+### Step 5: Create pipeline SQLAlchemy service modules --- DONE (partial)
+
+**What was done:**
+- Created `backend/pipeline/crawl_service.py` (crawl run/result CRUD)
+- Created `backend/pipeline/process_service.py` (location/tag/event processing)
+- Created `backend/tests/services/test_pipeline_crawl.py`
+- Created `backend/tests/services/test_pipeline_process.py`
+- All use `flush()` only, no `session.commit()`
+- All 232 tests pass
+
+**Still needed:**
+- `backend/pipeline/merge_service.py`:
+  - `merge_crawl_events(session, crawl_run_id=None) -> tuple[int, int]`
+  - Import pure-logic functions from `pipeline.merger`
+  - **No `session.commit()` calls** — only `flush()`
+- `backend/pipeline/archive_service.py`:
+  - `archive_outdated_events(session, website_id) -> tuple[int, list]`
+  - `run_archival_for_crawl_events(session, crawl_event_ids) -> tuple[int, int]`
+  - **No `session.commit()` calls** — only `flush()`
+- `save_crawl_events()` in `process_service.py`:
+  - `save_crawl_events(session, crawl_result_id, events_data) -> int`
+  - Serialize `raw_data` with `json.dumps(data, default=str)` before storing
+- `get_websites_due_for_crawling()` in `crawl_service.py`:
+  - `get_websites_due_for_crawling(session, website_ids=None) -> list[dict]`
+- `get_existing_upcoming_events()` in `crawl_service.py`:
+  - `get_existing_upcoming_events(session, website_id) -> list[dict]`
+- Tests for merge and archive services
+
+---
+
+### Step 6: Create pipeline database session factory
 
 **What to do:**
 - Create `backend/pipeline/database.py`:
@@ -132,69 +113,13 @@ These are problems we hit before and must avoid this time:
 
 ---
 
-### Step 6: Create pipeline services (SQLAlchemy DB operations)
-
-**What to do:**
-- Create `backend/pipeline/services/__init__.py`
-
-- Create `backend/pipeline/services/crawl.py`:
-  - `get_or_create_crawl_run(session, run_date) -> int`
-  - `create_crawl_result(session, crawl_run_id, website_id, filename) -> int`
-    (use ORM, NOT raw SQL `ON CONFLICT` — breaks SQLite tests)
-  - `update_crawl_result_status(session, crawl_result_id, status, **kwargs)`
-  - `update_crawl_result_crawled/extracted/processed/failed()`
-  - `complete_crawl_run(session, crawl_run_id)`
-  - `get_crawled_content(session, crawl_result_id) -> str | None`
-  - `get_extracted_content(session, crawl_result_id) -> tuple`
-  - `update_website_last_crawled(session, website_id)`
-  - `get_websites_due_for_crawling(session, website_ids=None) -> list[dict]`
-  - `get_existing_upcoming_events(session, website_id) -> list[dict]`
-  - `get_incomplete_crawl_results(session) -> list[dict]`
-  - **No `session.commit()` calls** — only `flush()`
-
-- Create `backend/pipeline/services/process.py`:
-  - `get_all_locations(session) -> list[dict]`
-  - `get_tag_rules(session) -> dict`
-  - `get_websites_with_tags(session) -> dict`
-  - `save_crawl_events(session, crawl_result_id, events_data) -> int`
-    (serialize `raw_data` with `json.dumps(data, default=str)` before storing)
-  - **No `session.commit()` calls** — only `flush()`
-
-- Create `backend/pipeline/services/merge.py`:
-  - `merge_crawl_events(session, crawl_run_id=None) -> tuple[int, int]`
-  - Import pure-logic functions from `pipeline.merger`
-  - **No `session.commit()` calls** — only `flush()`
-
-- Create `backend/pipeline/services/archive.py`:
-  - `archive_outdated_events(session, website_id) -> tuple[int, list]`
-  - `run_archival_for_crawl_events(session, crawl_event_ids) -> tuple[int, int]`
-  - **No `session.commit()` calls** — only `flush()`
-
-**Verify:**
-- `cd backend && uv run python -c "from pipeline.services import crawl, process, merge, archive"` works
-
----
-
-### Step 7: Add tests for pipeline services
-
-**What to do:**
-- Create `backend/tests/test_pipeline_crawl_service.py`
-- Create `backend/tests/test_pipeline_process_service.py`
-- Reuse existing `conftest.py` fixtures (`db_session`, `async_engine`)
-- Tests use the transactional session (begin + rollback) — services use `flush()` not `commit()`
-
-**Verify:**
-- `cd backend && uv run pytest tests/ -v` — all tests pass (old + new)
-
----
-
-### Step 8: Create pipeline runner (new orchestrator)
+### Step 7: Create pipeline runner (new orchestrator)
 
 **What to do:**
 - Create `backend/pipeline/runner.py` replacing `main.py` as entry point
 - Uses `get_pipeline_session()` for all DB operations (which commits on exit)
 - Calls isolated `crawler.py` / `extractor.py` for crawl/extract
-- Calls `services/` for all DB operations
+- Calls `crawl_service.py`, `process_service.py`, etc. for all DB operations
 - Maintains async worker pool pattern (6 concurrent workers)
 - CLI: `cd backend && uv run python -m pipeline.runner [--ids N] [--limit N]`
 - `processor.py`, `frequency_analyzer.py`, `location_resolver.py` still use psycopg2 (marked TODO)
@@ -205,7 +130,7 @@ These are problems we hit before and must avoid this time:
 
 ---
 
-### Step 9: Remove old pipeline directory
+### Step 8: Remove old pipeline directory
 
 **What to do:**
 - Delete entire `../pipeline/` directory (except `venv/` which should be gitignored)
@@ -219,24 +144,20 @@ These are problems we hit before and must avoid this time:
 
 ## Files Summary
 
-| New File | Purpose |
-|----------|---------|
-| `backend/pipeline/__init__.py` | Package marker |
-| `backend/pipeline/database.py` | Pipeline session factory |
-| `backend/pipeline/runner.py` | New orchestrator |
-| `backend/pipeline/services/__init__.py` | Services package |
-| `backend/pipeline/services/crawl.py` | Crawl run/result CRUD |
-| `backend/pipeline/services/process.py` | Location/tag/event processing |
-| `backend/pipeline/services/merge.py` | Event deduplication |
-| `backend/pipeline/services/archive.py` | Event archival |
-
-| Moved File | Changes |
-|------------|---------|
-| `backend/pipeline/crawler.py` | Decoupled from DB |
-| `backend/pipeline/extractor.py` | Decoupled from DB |
-| `backend/pipeline/processor.py` | Lazy imports for `db`, `regex`, `crawler` |
-| `backend/pipeline/merger.py` | Lazy imports for `db`, `EditLogger` |
-| `backend/pipeline/db.py` | Moved as-is (legacy, used by processor/merger TODO) |
-| `backend/pipeline/main.py` | Removed exporter/uploader steps |
-| `backend/pipeline/frequency_analyzer.py` | Moved as-is |
-| `backend/pipeline/location_resolver.py` | Moved as-is |
+| File | Purpose | Status |
+|------|---------|--------|
+| `pipeline/__init__.py` | Package marker | Done |
+| `pipeline/crawl_service.py` | Crawl run/result CRUD (SQLAlchemy) | Done |
+| `pipeline/process_service.py` | Location/tag/event processing (SQLAlchemy) | Done (missing `save_crawl_events`) |
+| `pipeline/merge_service.py` | Event deduplication (SQLAlchemy) | TODO |
+| `pipeline/archive_service.py` | Event archival (SQLAlchemy) | TODO |
+| `pipeline/database.py` | Pipeline session factory | TODO |
+| `pipeline/runner.py` | New orchestrator | TODO |
+| `pipeline/crawler.py` | Decoupled from DB | Done |
+| `pipeline/extractor.py` | Decoupled from DB | Done |
+| `pipeline/processor.py` | Lazy imports for `db`, `regex`, `crawler` | Done |
+| `pipeline/merger.py` | Lazy imports for `db`, `EditLogger` | Done |
+| `pipeline/db.py` | Legacy (used by processor/merger TODO) | Moved as-is |
+| `pipeline/main.py` | Removed exporter/uploader steps | Done |
+| `pipeline/frequency_analyzer.py` | Moved as-is | Done |
+| `pipeline/location_resolver.py` | Moved as-is | Done |

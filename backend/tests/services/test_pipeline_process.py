@@ -11,7 +11,7 @@ from api.models import (
     WebsiteUrl,
 )
 from api.models.base import TagRuleType
-from pipeline.process_service import (
+from pipeline.db import (
     get_all_locations,
     get_tag_rules,
     get_websites_with_tags,

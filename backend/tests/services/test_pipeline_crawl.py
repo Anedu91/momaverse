@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from api.models import CrawlResult, CrawlRun, Website
 from api.models.base import CrawlResultStatus, CrawlRunStatus
-from pipeline.crawl_service import (
+from pipeline.db import (
     complete_crawl_run,
     create_crawl_result,
     get_crawled_content,
