@@ -8,8 +8,7 @@ Orchestrates the complete event processing workflow:
 3. Process - Parse responses, enrich with location data, store in crawl_events
 4. Merge - Deduplicate crawl_events into final events table
 5. Archive - Hide events no longer found in recent crawls
-6. Export - Generate JSON files from events table for website
-7. Upload - Push JSON files to FTP server
+6. Adjust - Update crawl frequencies based on historical data
 
 Usage:
     python main.py                     # Process all websites due for crawling
@@ -23,9 +22,6 @@ import asyncio
 import sys
 from typing import Any
 from datetime import datetime
-
-import exporter
-import uploader
 
 from pipeline import (
     crawler,
@@ -438,32 +434,9 @@ async def run_pipeline(
         new_events, merged_events = merger.merge_crawl_events(cursor, connection)
         print(f"\n✓ Merged events ({new_events} new, {merged_events} merged)\n")
 
-        # STEP 6: Export to JSON from events table
+        # STEP 6: Adjust crawl frequencies based on historical data
         print(f"{'=' * 60}")
-        print("STEP 6: Exporting Events to JSON")
-        print(f"{'=' * 60}")
-
-        print("  Exporting events from database to JSON...")
-        exporter.export_events(cursor)
-
-        print("\n✓ Event export completed\n")
-
-        # STEP 7: Upload data files
-        print(f"{'=' * 60}")
-        print("STEP 7: Uploading Data")
-        print(f"{'=' * 60}")
-
-        success = uploader.upload(use_tls=False)
-
-        if success:
-            print("\n✓ Data upload completed\n")
-        else:
-            print("\n✗ Data upload failed\n")
-            return False
-
-        # STEP 8: Adjust crawl frequencies based on historical data
-        print(f"{'=' * 60}")
-        print("STEP 8: Adjusting Crawl Frequencies")
+        print("STEP 6: Adjusting Crawl Frequencies")
         print(f"{'=' * 60}")
 
         freq_results = frequency_analyzer.analyze_frequencies(cursor, connection)
