@@ -8,6 +8,7 @@ import pytest_asyncio
 from api.database import Base
 from api.models.crawl import CrawlResult  # noqa: F401
 from api.models.edit import Edit  # noqa: F401
+from api.models.feedback import Feedback  # noqa: F401
 from api.models.tag import Tag  # noqa: F401
 from api.models.user import User  # noqa: F401
 

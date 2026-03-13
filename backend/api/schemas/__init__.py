@@ -1,3 +1,4 @@
+from api.schemas.auth import AuthResponse
 from api.schemas.common import PaginatedResponse, TagResponse
 from api.schemas.edit import EditResponse
 from api.schemas.event import (
@@ -9,7 +10,7 @@ from api.schemas.event import (
     OccurrenceResponse,
     OccurrenceSchema,
 )
-from api.schemas.feedback import FeedbackCreate
+from api.schemas.feedback import FeedbackCreate, FeedbackResponse
 from api.schemas.location import (
     AlternateNameResponse,
     LocationCreate,
@@ -51,8 +52,11 @@ __all__ = [
     "WebsiteResponse",
     "WebsiteUpdate",
     "WebsiteUrlResponse",
+    # Auth
+    "AuthResponse",
     # Feedback
     "FeedbackCreate",
+    "FeedbackResponse",
     # User
     "UserCreate",
     "UserLogin",
