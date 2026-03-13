@@ -39,6 +39,9 @@ _bearer_scheme = HTTPBearer(auto_error=False)
 ALGORITHM = "HS256"
 
 
+# TODO: Add `exp` claim to JWT tokens once user-facing auth flows are implemented.
+# Currently tokens don't expire — acceptable during migration but must be addressed
+# before production user interactions.
 def create_access_token(user_id: int) -> str:
     settings = get_settings()
     payload = {"sub": str(user_id)}

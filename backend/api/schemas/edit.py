@@ -25,6 +25,8 @@ class EditResponse(BaseModel):
     applied_at: datetime | None = None
 
 
+# TODO: Remove EditHistoryEntry — user_name/user_email are not populated from
+# the Edit model. This schema will be replaced when edit history is redesigned.
 class EditHistoryEntry(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

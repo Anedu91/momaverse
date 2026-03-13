@@ -69,7 +69,8 @@ class ResponseWrapperMiddleware:
                 wrapped = _wrap_body(raw_body, status_code)
                 encoded = json.dumps(wrapped, default=str).encode()
 
-                assert initial_message is not None
+                if initial_message is None:  # pragma: no cover — defensive guard
+                    return
                 headers = MutableHeaders(scope=initial_message)
                 headers["content-length"] = str(len(encoded))
 

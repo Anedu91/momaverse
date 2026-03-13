@@ -64,6 +64,8 @@ def _serialize_value(value: Any) -> str | None:
     return str(value)
 
 
+# NOTE: Callers are responsible for transaction management (commit/rollback).
+# This function only flushes — it does not commit.
 async def _insert_edit(
     db: AsyncSession,
     *,
