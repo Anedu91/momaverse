@@ -10,6 +10,7 @@ __all__ = [
     "WebsiteCreate",
     "WebsiteUpdate",
     "WebsiteResponse",
+    "WebsiteListItem",
     "WebsiteUrlResponse",
     "WebsiteDetailResponse",
 ]
@@ -64,6 +65,17 @@ class WebsiteResponse(BaseModel):
     disabled: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class WebsiteListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    description: str | None = None
+    base_url: str | None = None
+    disabled: bool = False
+    event_count: int = 0
 
 
 class WebsiteDetailResponse(WebsiteResponse):
