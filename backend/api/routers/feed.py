@@ -14,12 +14,13 @@ router = APIRouter(prefix="/feed", tags=["feed"])
 @router.get("/events")
 async def feed_events(db: SessionDep) -> list[dict[str, object]]:
     """Return events for the public frontend map (flat JSON array)."""
-    cutoff = date.today() + timedelta(days=90)
+    today = date.today()
+    cutoff = today + timedelta(days=90)
 
     # IDs of events with at least one occurrence between today and cutoff
     event_ids_sq = (
         select(EventOccurrence.event_id)
-        .where(EventOccurrence.start_date >= date.today())
+        .where(EventOccurrence.start_date >= today)
         .where(EventOccurrence.start_date <= cutoff)
         .distinct()
         .subquery()
