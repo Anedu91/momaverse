@@ -21,17 +21,9 @@ from api.services.edit_logger import (
     log_updates,
 )
 from api.services.tags import get_or_create_tag
+from api.services.utils import extract_editor_context, snapshot_record
 
 router = APIRouter(prefix="/events", tags=["events"])
-
-
-def _snapshot(record: Event) -> dict[str, object]:
-    """Extract loggable scalar fields from an Event instance."""
-    from sqlalchemy import inspect as sa_inspect
-
-    return {
-        c.key: getattr(record, c.key) for c in sa_inspect(record).mapper.column_attrs
-    }
 
 
 async def _refresh_event(db: SessionDep, event_id: int) -> Event:
@@ -75,6 +67,8 @@ async def _get_event_or_404(db: SessionDep, event_id: int) -> Event:
 @router.get("/", response_model=PaginatedResponse[EventListItem])
 async def list_events(
     db: SessionDep,
+    # TODO: Add upper bound validation (e.g. Query(ge=1, le=200)) to prevent
+    # unbounded queries that could exhaust memory.
     limit: int = 50,
     offset: int = 0,
     upcoming: bool = False,
@@ -204,6 +198,9 @@ async def create_event(
                 detail=f"Location {data.location_id} not found",
             )
 
+    # TODO: Validate website_id FK if added to EventCreate schema. Currently
+    # events are linked to websites via crawling, not manual creation.
+
     event = Event(
         name=data.name,
         short_name=data.short_name,
@@ -235,15 +232,13 @@ async def create_event(
         tag = await get_or_create_tag(db, tag_name)
         db.add(EventTag(event_id=event.id, tag_id=tag.id))
 
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_insert(
         db,
         table_name="events",
         record_id=event.id,
-        record_data=_snapshot(event),
+        record_data=snapshot_record(event),
         user_id=user.id,
         editor_ip=editor_ip,
         editor_user_agent=editor_user_agent,
@@ -263,7 +258,7 @@ async def update_event(
     user: CurrentUserDep,
 ) -> EventDetailResponse:
     event = await _get_event_or_404(db, event_id)
-    old_data = _snapshot(event)
+    old_data = snapshot_record(event)
 
     update_fields = data.model_dump(exclude_unset=True)
     scalar_fields = {
@@ -316,10 +311,8 @@ async def update_event(
             tag = await get_or_create_tag(db, tag_name)
             db.add(EventTag(event_id=event.id, tag_id=tag.id))
 
-    new_data = _snapshot(event)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    new_data = snapshot_record(event)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_updates(
         db,
@@ -346,10 +339,8 @@ async def delete_event(
 ) -> Response:
     event = await _get_event_or_404(db, event_id)
 
-    record_data = _snapshot(event)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    record_data = snapshot_record(event)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_delete(
         db,

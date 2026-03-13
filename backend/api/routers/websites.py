@@ -21,17 +21,9 @@ from api.services.edit_logger import (
     log_updates,
 )
 from api.services.tags import get_or_create_tag
+from api.services.utils import extract_editor_context, snapshot_record
 
 router = APIRouter(prefix="/websites", tags=["websites"])
-
-
-def _snapshot(record: Website) -> dict[str, object]:
-    """Extract loggable scalar fields from a Website instance."""
-    from sqlalchemy import inspect as sa_inspect
-
-    return {
-        c.key: getattr(record, c.key) for c in sa_inspect(record).mapper.column_attrs
-    }
 
 
 async def _refresh_website(db: SessionDep, website_id: int) -> Website:
@@ -87,6 +79,8 @@ async def _validate_location_ids(db: SessionDep, location_ids: list[int]) -> Non
 @router.get("/", response_model=PaginatedResponse[WebsiteListItem])
 async def list_websites(
     db: SessionDep,
+    # TODO: Add upper bound validation (e.g. Query(ge=1, le=200)) to prevent
+    # unbounded queries that could exhaust memory.
     limit: int = 50,
     offset: int = 0,
 ) -> PaginatedResponse[WebsiteListItem]:
@@ -172,15 +166,13 @@ async def create_website(
         tag = await get_or_create_tag(db, tag_name)
         db.add(WebsiteTag(website_id=website.id, tag_id=tag.id))
 
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_insert(
         db,
         table_name="websites",
         record_id=website.id,
-        record_data=_snapshot(website),
+        record_data=snapshot_record(website),
         user_id=user.id,
         editor_ip=editor_ip,
         editor_user_agent=editor_user_agent,
@@ -200,7 +192,7 @@ async def update_website(
     user: CurrentUserDep,
 ) -> WebsiteDetailResponse:
     website = await _get_website_or_404(db, website_id)
-    old_data = _snapshot(website)
+    old_data = snapshot_record(website)
 
     update_fields = data.model_dump(exclude_unset=True)
     scalar_fields = {
@@ -233,10 +225,8 @@ async def update_website(
             tag = await get_or_create_tag(db, tag_name)
             db.add(WebsiteTag(website_id=website.id, tag_id=tag.id))
 
-    new_data = _snapshot(website)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    new_data = snapshot_record(website)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_updates(
         db,
@@ -273,10 +263,8 @@ async def delete_website(
             detail="Cannot delete website with associated events",
         )
 
-    record_data = _snapshot(website)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    record_data = snapshot_record(website)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_delete(
         db,

@@ -20,17 +20,9 @@ from api.services.edit_logger import (
     log_updates,
 )
 from api.services.tags import get_or_create_tag
+from api.services.utils import extract_editor_context, snapshot_record
 
 router = APIRouter(prefix="/locations", tags=["locations"])
-
-
-def _snapshot(record: Location) -> dict[str, object]:
-    """Extract loggable scalar fields from a Location instance."""
-    from sqlalchemy import inspect as sa_inspect
-
-    return {
-        c.key: getattr(record, c.key) for c in sa_inspect(record).mapper.column_attrs
-    }
 
 
 async def _refresh_location(db: SessionDep, location_id: int) -> Location:
@@ -70,6 +62,8 @@ async def _get_location_or_404(db: SessionDep, location_id: int) -> Location:
 @router.get("/", response_model=PaginatedResponse[LocationListItem])
 async def list_locations(
     db: SessionDep,
+    # TODO: Add upper bound validation (e.g. Query(ge=1, le=200)) to prevent
+    # unbounded queries that could exhaust memory.
     limit: int = 50,
     offset: int = 0,
 ) -> PaginatedResponse[LocationListItem]:
@@ -156,15 +150,13 @@ async def create_location(
         tag = await get_or_create_tag(db, tag_name)
         db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_insert(
         db,
         table_name="locations",
         record_id=location.id,
-        record_data=_snapshot(location),
+        record_data=snapshot_record(location),
         user_id=user.id,
         editor_ip=editor_ip,
         editor_user_agent=editor_user_agent,
@@ -184,7 +176,7 @@ async def update_location(
     user: CurrentUserDep,
 ) -> LocationDetailResponse:
     location = await _get_location_or_404(db, location_id)
-    old_data = _snapshot(location)
+    old_data = snapshot_record(location)
 
     # Apply scalar updates
     update_fields = data.model_dump(exclude_unset=True)
@@ -215,10 +207,8 @@ async def update_location(
             tag = await get_or_create_tag(db, tag_name)
             db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
-    new_data = _snapshot(location)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    new_data = snapshot_record(location)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_updates(
         db,
@@ -255,10 +245,8 @@ async def delete_location(
             detail="Cannot delete location with associated events",
         )
 
-    record_data = _snapshot(location)
-    editor_ip = request.client.host if request.client else None
-    raw_ua = request.headers.get("user-agent")
-    editor_user_agent = raw_ua[:500] if raw_ua else None
+    record_data = snapshot_record(location)
+    editor_ip, editor_user_agent = extract_editor_context(request)
 
     await log_delete(
         db,
