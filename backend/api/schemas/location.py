@@ -1,14 +1,20 @@
+from __future__ import annotations
+
 from datetime import datetime
-from typing import Annotated
+from typing import TYPE_CHECKING, Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from api.schemas.common import TagResponse
 
+if TYPE_CHECKING:
+    from api.schemas.website import WebsiteResponse
+
 __all__ = [
     "LocationCreate",
     "LocationUpdate",
     "LocationResponse",
+    "LocationListItem",
     "AlternateNameResponse",
     "LocationDetailResponse",
 ]
@@ -67,6 +73,18 @@ class AlternateNameResponse(BaseModel):
     website_id: int | None = None
 
 
+class LocationListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    short_name: str | None = None
+    very_short_name: str | None = None
+    emoji: str | None = None
+    event_count: int = 0
+
+
 class LocationDetailResponse(LocationResponse):
     alternate_names: list[AlternateNameResponse] = []
     tags: list[TagResponse] = []
+    websites: list[WebsiteResponse] = []

@@ -11,6 +11,7 @@ __all__ = [
     "EventCreate",
     "EventUpdate",
     "EventResponse",
+    "EventListItem",
     "EventUrlResponse",
     "EventDetailResponse",
 ]
@@ -88,6 +89,22 @@ class EventResponse(BaseModel):
     reviewed: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class EventListItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    short_name: str | None = None
+    emoji: str | None = None
+    location_id: int | None = None
+    location_display_name: str | None = None
+    website_id: int | None = None
+    website_name: str | None = None
+    next_date: date | None = None
+    archived: bool = False
+    suppressed: bool = False
 
 
 class EventDetailResponse(EventResponse):

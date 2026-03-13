@@ -4,6 +4,7 @@ from api.schemas.edit import EditResponse
 from api.schemas.event import (
     EventCreate,
     EventDetailResponse,
+    EventListItem,
     EventResponse,
     EventUpdate,
     EventUrlResponse,
@@ -15,6 +16,7 @@ from api.schemas.location import (
     AlternateNameResponse,
     LocationCreate,
     LocationDetailResponse,
+    LocationListItem,
     LocationResponse,
     LocationUpdate,
 )
@@ -23,10 +25,14 @@ from api.schemas.user import UserCreate, UserLogin, UserResponse
 from api.schemas.website import (
     WebsiteCreate,
     WebsiteDetailResponse,
+    WebsiteListItem,
     WebsiteResponse,
     WebsiteUpdate,
     WebsiteUrlResponse,
 )
+
+# Resolve forward references for circular imports (Location <-> Website)
+LocationDetailResponse.model_rebuild()
 
 __all__ = [
     # Common
@@ -36,11 +42,13 @@ __all__ = [
     "AlternateNameResponse",
     "LocationCreate",
     "LocationDetailResponse",
+    "LocationListItem",
     "LocationResponse",
     "LocationUpdate",
     # Event
     "EventCreate",
     "EventDetailResponse",
+    "EventListItem",
     "EventResponse",
     "EventUpdate",
     "EventUrlResponse",
@@ -49,6 +57,7 @@ __all__ = [
     # Website
     "WebsiteCreate",
     "WebsiteDetailResponse",
+    "WebsiteListItem",
     "WebsiteResponse",
     "WebsiteUpdate",
     "WebsiteUrlResponse",
