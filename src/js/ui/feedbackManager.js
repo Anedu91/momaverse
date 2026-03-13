@@ -18,7 +18,7 @@ const FeedbackManager = (() => {
     // ========================================
 
     const CONFIG = {
-        API_ENDPOINT: 'api/feedback.php',
+        API_ENDPOINT: '/api/v1/feedback/',
         MAX_LENGTH: 10000
     };
 
