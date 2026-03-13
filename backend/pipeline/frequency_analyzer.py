@@ -27,7 +27,7 @@ import argparse
 import sys
 from typing import Any
 
-from pipeline import db
+from pipeline import db_sync as db
 
 # Minimum completed crawls before auto-adjusting
 MIN_CRAWL_HISTORY = 3

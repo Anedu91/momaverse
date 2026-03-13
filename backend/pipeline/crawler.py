@@ -12,7 +12,7 @@ from typing import Any
 
 import httpx
 
-from pipeline import db
+from pipeline import db_sync as db
 from crawl4ai import CacheMode
 
 # Default timeout for crawl operations (in seconds)

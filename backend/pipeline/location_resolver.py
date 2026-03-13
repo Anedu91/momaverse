@@ -11,7 +11,7 @@ can match events to the newly created locations via website-scoped alternate nam
 import math
 from typing import Any
 
-from pipeline import db
+from pipeline import db_sync as db
 from pipeline.processor import _normalize_location_name, normalize_event_name_caps
 
 # Buenos Aires geographic bounds -- venues outside these are skipped

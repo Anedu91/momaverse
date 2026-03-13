@@ -19,7 +19,7 @@ from typing import Any
 
 import regex
 
-from pipeline import db
+from pipeline import db_sync as db
 from pipeline.crawler import create_safe_filename
 
 # Blocked emoji characters that render poorly

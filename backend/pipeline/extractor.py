@@ -19,9 +19,9 @@ from urllib.parse import urljoin
 
 import httpx
 from dotenv import load_dotenv
-from PIL import Image
+from PIL import Image as PILImage
 
-from pipeline import db
+from pipeline import db_sync as db
 from pipeline.processor import extract_url_from_content
 from pydantic import BaseModel, Field
 
@@ -30,19 +30,21 @@ load_dotenv()
 try:
     from google import genai
 
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL: str | None = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "120"))
+    GEMINI_API_KEY: str | None = os.environ.get("GEMINI_API_KEY")
+    GEMINI_MODEL: str = (
+        os.environ.get("GEMINI_MODEL", "gemini-2.5-flash") or "gemini-2.5-flash"
+    )
+    GEMINI_TIMEOUT: int = int(os.environ.get("GEMINI_TIMEOUT", "120"))
     if GEMINI_API_KEY:
-        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+        genai_client: genai.Client | None = genai.Client(api_key=GEMINI_API_KEY)
     else:
         genai_client = None
 except ImportError:
     print("Warning: google-genai not installed. Extraction will be skipped.")
-    genai = None
+    genai = None  # type: ignore[assignment]
     genai_client = None
     GEMINI_API_KEY = None
-    GEMINI_MODEL = None
+    GEMINI_MODEL = "gemini-2.5-flash"
     GEMINI_TIMEOUT = 120
 
 
@@ -263,7 +265,7 @@ async def download_and_encode_image(
             # Load and resize image if needed
             img_data = response.content
             try:
-                img = Image.open(BytesIO(img_data))
+                img: PILImage.Image = PILImage.open(BytesIO(img_data))
 
                 # Convert to RGB if necessary (for JPEG output)
                 if img.mode in ("RGBA", "P"):
@@ -274,7 +276,7 @@ async def download_and_encode_image(
                 if max(img.size) > max_dimension:
                     ratio = max_dimension / max(img.size)
                     new_size = (int(img.size[0] * ratio), int(img.size[1] * ratio))
-                    img = img.resize(new_size, Image.Resampling.LANCZOS)
+                    img = img.resize(new_size, PILImage.Resampling.LANCZOS)
 
                 # Encode to bytes
                 buffer = BytesIO()
@@ -388,11 +390,11 @@ async def extract_with_vision(
     prompt_text = get_vision_prompt(url, content, current_date_string, name, notes)
 
     # Build multimodal content: text prompt + images
-    contents = [prompt_text] + image_parts
+    contents: list[Any] = [prompt_text] + image_parts
 
     try:
         response = await asyncio.wait_for(
-            genai_client.aio.models.generate_content(
+            genai_client.aio.models.generate_content(  # type: ignore[union-attr]
                 model=GEMINI_MODEL,
                 contents=contents,
                 config={
@@ -606,6 +608,7 @@ async def enrich_events_batch(
         return {}
 
     prompt = get_enrichment_prompt(event_names, venue_name)
+    assert genai_client is not None
 
     try:
         response = await asyncio.wait_for(
@@ -619,7 +622,7 @@ async def enrich_events_batch(
             ),
             timeout=GEMINI_TIMEOUT,
         )
-        result = json.loads(response.text.strip())
+        result = json.loads((response.text or "").strip())
         return {
             item.get("name", ""): {
                 "description": item.get("description", ""),
@@ -650,6 +653,7 @@ For each event provide: name, location (venue name), occurrences (array of start
 Website content:
 
 {chunk_content}"""
+    assert genai_client is not None
 
     try:
         response = await asyncio.wait_for(
@@ -663,7 +667,7 @@ Website content:
             ),
             timeout=CHUNK_TIMEOUT,
         )
-        result = json.loads(response.text.strip())
+        result = json.loads((response.text or "").strip())
         events: list[dict[str, Any]] = result.get("events", [])
         return events
     except asyncio.TimeoutError:
@@ -967,7 +971,7 @@ async def extract_events(
                 ),
                 timeout=GEMINI_TIMEOUT,
             )
-            response_text = response.text.strip()
+            response_text = (response.text or "").strip()
 
         if not response_text or not response_text.strip():
             response_text = '{"events": []}'

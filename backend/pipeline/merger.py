@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from pipeline import db
+from pipeline import db_sync as db
 
 # Add database module to path for edit logger
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "database"))
