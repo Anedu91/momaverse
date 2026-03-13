@@ -83,7 +83,7 @@ class ResponseWrapperMiddleware:
 def _wrap_body(raw_body: bytes, status_code: int) -> dict[str, Any]:
     try:
         body: Any = json.loads(raw_body) if raw_body else {}
-    except json.JSONDecodeError, UnicodeDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         body = {}
 
     if 200 <= status_code < 300:
