@@ -58,7 +58,7 @@ def _decode_token(token: str) -> int | None:
         if sub is None:
             return None
         return int(sub)
-    except JWTError, ValueError:
+    except (JWTError, ValueError):
         return None
 
 

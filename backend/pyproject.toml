@@ -28,6 +28,11 @@ dev = [
     "ruff>=0.15.5",
 ]
 
+[tool.ruff]
+# Ruff doesn't recognize Python 3.14 yet, so it misformats except clauses
+# without an explicit target. Pin to 3.12 until ruff adds 3.14 support.
+target-version = "py312"
+
 [tool.mypy]
 strict = true
 ignore_missing_imports = true
