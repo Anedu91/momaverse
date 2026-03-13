@@ -100,10 +100,10 @@ document.addEventListener('DOMContentLoaded', () => {
          * @property {number} MAP_MAX_ZOOM - Maximum zoom level
          */
         config: {
-            EVENT_INIT_URL: 'data/events.init.json',
-            LOCATIONS_INIT_URL: 'data/locations.init.json',
-            EVENT_FULL_URL: 'data/events.full.json',
-            LOCATIONS_FULL_URL: 'data/locations.full.json',
+            EVENT_INIT_URL: '/api/v1/feed/events',
+            LOCATIONS_INIT_URL: '/api/v1/feed/locations',
+            EVENT_FULL_URL: '/api/v1/feed/events',
+            LOCATIONS_FULL_URL: '/api/v1/feed/locations',
             TAG_CONFIG_URL: 'data/tags.json',
             RELATED_TAGS_URL: 'data/related_tags.json',
 

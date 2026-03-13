@@ -33,7 +33,7 @@ async def client(db_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
 
 class TestCreateFeedbackHappyPath:
     @pytest.mark.asyncio
-    async def test_returns_201_with_id_and_created_at(self, client):
+    async def test_returns_201_with_success(self, client):
         # Arrange
         payload = {"message": "Great site!"}
 
@@ -42,13 +42,10 @@ class TestCreateFeedbackHappyPath:
 
         # Assert
         assert resp.status_code == 201
-        body = resp.json()
-        assert "id" in body
-        assert "created_at" in body
-        assert body["message"] == "Great site!"
+        assert resp.json() == {"success": True}
 
     @pytest.mark.asyncio
-    async def test_stores_page_url_when_provided(self, client):
+    async def test_stores_page_url_when_provided(self, client, db_session):
         # Arrange
         payload = {
             "message": "Bug on this page",
@@ -60,11 +57,17 @@ class TestCreateFeedbackHappyPath:
 
         # Assert
         assert resp.status_code == 201
-        body = resp.json()
-        assert body["page_url"] == "https://example.com/page"
+        from api.models.feedback import Feedback
+        from sqlalchemy import select
+
+        result = await db_session.execute(
+            select(Feedback).where(Feedback.message == "Bug on this page")
+        )
+        row = result.scalar_one()
+        assert row.page_url == "https://example.com/page"
 
     @pytest.mark.asyncio
-    async def test_captures_user_agent_header(self, client):
+    async def test_captures_user_agent_header(self, client, db_session):
         # Arrange
         payload = {"message": "Feedback with UA"}
         headers = {"user-agent": "TestBrowser/1.0"}
@@ -74,8 +77,14 @@ class TestCreateFeedbackHappyPath:
 
         # Assert
         assert resp.status_code == 201
-        body = resp.json()
-        assert body["user_agent"] == "TestBrowser/1.0"
+        from api.models.feedback import Feedback
+        from sqlalchemy import select
+
+        result = await db_session.execute(
+            select(Feedback).where(Feedback.message == "Feedback with UA")
+        )
+        row = result.scalar_one()
+        assert row.user_agent == "TestBrowser/1.0"
 
 
 class TestCreateFeedbackValidation:
