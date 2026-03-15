@@ -1,7 +1,6 @@
 """Shared test fixtures for the momaverse backend test suite."""
 
 from collections.abc import AsyncGenerator
-from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -13,58 +12,43 @@ from api.models.feedback import Feedback  # noqa: F401
 from api.models.instagram import InstagramAccount  # noqa: F401
 from api.models.tag import Tag  # noqa: F401
 from api.models.user import User  # noqa: F401
-
-# SQLite does not support JSONB. Map it to JSON for tests.
-# Import models that use JSONB so their tables are registered.
 from api.models.website import Website  # noqa: F401
-from sqlalchemy import JSON, event
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
+from testcontainers.postgres import PostgresContainer
 
 
 @pytest.fixture(scope="session")
-def async_engine() -> AsyncEngine:
-    """Create an async in-memory SQLite engine for tests."""
-    engine = create_async_engine(
-        "sqlite+aiosqlite:///:memory:",
-    )
-
-    @event.listens_for(engine.sync_engine, "connect")
-    def _set_sqlite_pragma(dbapi_conn: Any, _: Any) -> None:
-        cursor = dbapi_conn.cursor()
-        cursor.execute("PRAGMA foreign_keys=OFF")
-        cursor.close()
-
-    return engine
+def postgres_container() -> PostgresContainer:
+    """Start a PostgreSQL 16 container for the test session."""
+    with PostgresContainer("postgres:16") as pg:
+        yield pg
 
 
 @pytest_asyncio.fixture(scope="session")
-async def _create_tables(
-    async_engine: AsyncEngine,
-) -> AsyncGenerator[None, None]:
-    """Create all tables once per test session."""
-
-    # Replace JSONB columns with JSON for SQLite compatibility.
-    for table in Base.metadata.tables.values():
-        for column in table.columns:
-            if isinstance(column.type, JSONB):
-                column.type = JSON()
-
-    async with async_engine.begin() as conn:
+async def async_engine(
+    postgres_container: PostgresContainer,
+) -> AsyncGenerator[AsyncEngine, None]:
+    """Create an async engine connected to the test PostgreSQL container."""
+    sync_url = postgres_container.get_connection_url()
+    # Convert psycopg2 URL to asyncpg URL
+    async_url = sync_url.replace("psycopg2", "asyncpg")
+    engine = create_async_engine(async_url)
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with async_engine.begin() as conn:
+    yield engine
+    async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest_asyncio.fixture
 async def db_session(
-    async_engine: AsyncEngine, _create_tables: None
+    async_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncSession, None]:
     """Provide a transactional async session that rolls back."""
     session_factory = async_sessionmaker(

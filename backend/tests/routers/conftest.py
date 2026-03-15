@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 @pytest_asyncio.fixture
 async def db_session(
-    async_engine: AsyncEngine, _create_tables: None
+    async_engine: AsyncEngine,
 ) -> AsyncGenerator[AsyncSession, None]:
     """Provide a transactional async session using savepoints.
 
