@@ -4,7 +4,7 @@
 .env.*.local
 
 # Claude Code and IDE
-.claude/
+.claude/settings.local.json
 .vscode/
 CLAUDE.md
 
@@ -153,6 +153,5 @@ mobile/android/**/lint-results*
 *.hprof
 
 
-/.agents
 /.planning
 skills-lock.json

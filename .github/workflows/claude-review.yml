@@ -1,0 +1,41 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@claude') &&
+       github.event.issue.pull_request)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          model: "claude-sonnet-4-6"
+          claude_args: "--max-turns 10"
+          prompt: |
+            Review this PR following the review checklist in .agents/skills/backend-engineer/references/review-checklist.md
+            and produce a report using .agents/skills/backend-engineer/references/report-template.md.
+
+            Focus on:
+            1. Security issues (SQL injection, XSS, secrets in code)
+            2. Performance (N+1 queries, missing pagination)
+            3. Error handling and validation
+            4. Test coverage for new code
+            5. Breaking changes to existing APIs
