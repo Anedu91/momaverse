@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from api.admin import setup_admin
 from api.routers import auth, events, feed, feedback, locations, websites
 
 app = FastAPI(title="Momaverse API")
@@ -28,6 +29,9 @@ app.include_router(feed.router, prefix="/api/v1")
 def health() -> dict[str, str]:
     return {"status": "ok"}
 
+
+# SQLAdmin mounted on /admin — must come before the catch-all static mount
+setup_admin(app)
 
 # Serve frontend static files — must be last so API routes take priority
 _frontend_dir = Path(__file__).resolve().parent.parent.parent / "src"
