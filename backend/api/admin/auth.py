@@ -48,4 +48,12 @@ class AdminAuth(AuthenticationBackend):
         user_id = request.session.get("user_id")
         if not user_id:
             return False
+
+        async with AsyncSessionLocal() as session:
+            user = await session.scalar(select(User).where(User.id == user_id))
+
+        if user is None or not user.is_admin:
+            request.session.clear()
+            return False
+
         return True

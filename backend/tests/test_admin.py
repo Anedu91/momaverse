@@ -13,6 +13,7 @@ from api.admin.views import (
     ALL_VIEWS,
     EditAdmin,
     FeedbackAdmin,
+    UserAdmin,
 )
 from api.dependencies import hash_password
 
@@ -180,13 +181,49 @@ async def test_admin_authenticate_requires_user_id() -> None:
 
 @pytest.mark.asyncio
 async def test_admin_authenticate_succeeds_with_session() -> None:
-    """authenticate() should return True when session has a user_id."""
-    auth = AdminAuth(secret_key="test-secret")
-    request = _build_login_request("", "")
-    request.session["user_id"] = 1
+    """authenticate() should return True when session has a valid admin user_id."""
+    fake_user = _make_fake_user(is_admin=True)
 
-    result = await auth.authenticate(request)  # type: ignore[arg-type]
+    with _patch_db_lookup(fake_user):
+        auth = AdminAuth(secret_key="test-secret")
+        request = _build_login_request("", "")
+        request.session["user_id"] = 1
+
+        result = await auth.authenticate(request)  # type: ignore[arg-type]
     assert result is True
+
+
+@pytest.mark.asyncio
+async def test_admin_authenticate_rejects_demoted_user() -> None:
+    """authenticate() should reject and clear session for a demoted user."""
+    fake_user = _make_fake_user(is_admin=False)
+
+    with _patch_db_lookup(fake_user):
+        auth = AdminAuth(secret_key="test-secret")
+        request = _build_login_request("", "")
+        request.session["user_id"] = 1
+
+        result = await auth.authenticate(request)  # type: ignore[arg-type]
+    assert result is False
+    assert "user_id" not in request.session
+
+
+@pytest.mark.asyncio
+async def test_admin_authenticate_rejects_deleted_user() -> None:
+    """authenticate() should reject and clear session for a deleted user."""
+    with _patch_db_lookup(None):
+        auth = AdminAuth(secret_key="test-secret")
+        request = _build_login_request("", "")
+        request.session["user_id"] = 999
+
+        result = await auth.authenticate(request)  # type: ignore[arg-type]
+    assert result is False
+    assert "user_id" not in request.session
+
+
+def test_user_admin_cannot_create() -> None:
+    """UserAdmin must not allow user creation (users are created via the API)."""
+    assert UserAdmin.can_create is False
 
 
 # ---------------------------------------------------------------------------

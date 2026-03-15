@@ -82,9 +82,10 @@ class CrawlResultAdmin(ModelView, model=CrawlResult):
     name_plural = "Crawl Results"
     icon = "fa-solid fa-file-lines"
     column_list = ["id", "website_id", "filename", "event_count", "status"]
-    # Exclude large text fields from forms and detail views
+    # Exclude large text fields from forms, detail views, and exports
     form_excluded_columns = ["crawled_content", "extracted_content"]
     column_details_exclude_list = ["crawled_content", "extracted_content"]
+    column_export_exclude_list = ["crawled_content", "extracted_content"]
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,7 @@ class UserAdmin(ModelView, model=User):
     name = "User"
     name_plural = "Users"
     icon = "fa-solid fa-users"
+    can_create = False
     column_list = ["id", "email", "display_name", "is_admin", "last_login_at"]
     # Never expose password_hash in forms or detail views
     form_excluded_columns = ["password_hash"]

@@ -2,6 +2,7 @@
 
 from fastapi import FastAPI
 from sqladmin import Admin
+from starlette.middleware.sessions import SessionMiddleware
 
 from api.admin.auth import AdminAuth
 from api.admin.views import ALL_VIEWS
@@ -16,6 +17,7 @@ def setup_admin(app: FastAPI) -> Admin:
     ``/admin`` takes routing priority.
     """
     settings = get_settings()
+    app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
     authentication_backend = AdminAuth(secret_key=settings.secret_key)
 
     admin = Admin(
