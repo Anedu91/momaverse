@@ -36,7 +36,8 @@ def run_migrations_offline() -> None:
     script output.
     """
     settings = get_settings()
-    url = settings.database_url
+    # Offline mode generates SQL scripts; strip the async driver
+    url = settings.database_url.replace("+asyncpg", "")
     context.configure(
         url=url,
         target_metadata=target_metadata,

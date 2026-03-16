@@ -810,13 +810,16 @@ def downgrade() -> None:
     op.drop_table("crawl_runs")
     # ### end Alembic commands ###
 
-    # Drop enum types
-    sa.Enum(name="conflict_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="crawl_result_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="crawl_run_status").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="edit_action").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="edit_source").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="source_type").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="sync_source").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="crawl_mode").drop(op.get_bind(), checkfirst=True)
-    sa.Enum(name="tag_rule_type").drop(op.get_bind(), checkfirst=True)
+    # Drop enum types (use op.execute to avoid MissingGreenlet in async context)
+    for enum_name in [
+        "conflict_status",
+        "crawl_result_status",
+        "crawl_run_status",
+        "edit_action",
+        "edit_source",
+        "source_type",
+        "sync_source",
+        "crawl_mode",
+        "tag_rule_type",
+    ]:
+        op.execute(f"DROP TYPE IF EXISTS {enum_name}")
