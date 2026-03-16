@@ -1,3 +1,2 @@
-project_id     = "momaverse"
-region         = "us-central1"
-gemini_api_key = ""
+project_id = "momaverse"
+region     = "us-central1"
