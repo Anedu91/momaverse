@@ -15,6 +15,7 @@ dependencies = [
     "passlib[bcrypt]>=1.7.4",
     "bcrypt<4.1",
     "itsdangerous>=2.2.0",
+    "alembic>=1.18.4",
 ]
 
 [dependency-groups]
@@ -38,6 +39,10 @@ asyncio_default_test_loop_scope = "session"
 # Ruff doesn't recognize Python 3.14 yet, so it misformats except clauses
 # without an explicit target. Pin to 3.12 until ruff adds 3.14 support.
 target-version = "py312"
+
+[tool.ruff.lint.per-file-ignores]
+# SQLAlchemy models use string forward references resolved at runtime
+"api/models/*.py" = ["F821"]
 
 [tool.mypy]
 strict = true

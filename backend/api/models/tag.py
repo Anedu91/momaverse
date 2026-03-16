@@ -20,7 +20,7 @@ class TagRule(CreatedAtMixin, Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     rule_type: Mapped[TagRuleType] = mapped_column(
-        Enum(TagRuleType, name="tag_rule_type", create_type=False)
+        Enum(TagRuleType, name="tag_rule_type")
     )
     pattern: Mapped[str] = mapped_column(String(100))
     replacement: Mapped[str | None] = mapped_column(String(100))

@@ -26,7 +26,7 @@ class CrawlRun(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     run_date: Mapped[date] = mapped_column(Date, unique=True)
     status: Mapped[CrawlRunStatus] = mapped_column(
-        Enum(CrawlRunStatus, name="crawl_run_status", create_type=False),
+        Enum(CrawlRunStatus, name="crawl_run_status"),
         server_default="running",
     )
     started_at: Mapped[datetime] = mapped_column(
@@ -53,7 +53,7 @@ class CrawlResult(Base):
     filename: Mapped[str] = mapped_column(String(255))
     event_count: Mapped[int] = mapped_column(Integer, server_default="0")
     status: Mapped[CrawlResultStatus] = mapped_column(
-        Enum(CrawlResultStatus, name="crawl_result_status", create_type=False),
+        Enum(CrawlResultStatus, name="crawl_result_status"),
         server_default="pending",
     )
     crawled_content: Mapped[str | None] = mapped_column(Text)

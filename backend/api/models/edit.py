@@ -24,14 +24,10 @@ class Edit(Base):
     table_name: Mapped[str] = mapped_column(String(50))
     record_id: Mapped[int] = mapped_column(Integer)
     field_name: Mapped[str | None] = mapped_column(String(100))
-    action: Mapped[EditAction] = mapped_column(
-        Enum(EditAction, name="edit_action", create_type=False)
-    )
+    action: Mapped[EditAction] = mapped_column(Enum(EditAction, name="edit_action"))
     old_value: Mapped[str | None] = mapped_column(Text)
     new_value: Mapped[str | None] = mapped_column(Text)
-    source: Mapped[EditSource] = mapped_column(
-        Enum(EditSource, name="edit_source", create_type=False)
-    )
+    source: Mapped[EditSource] = mapped_column(Enum(EditSource, name="edit_source"))
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
@@ -52,7 +48,7 @@ class SyncState(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     source: Mapped[SyncSourceEnum] = mapped_column(
-        Enum(SyncSourceEnum, name="sync_source", create_type=False), unique=True
+        Enum(SyncSourceEnum, name="sync_source"), unique=True
     )
     last_synced_edit_id: Mapped[int | None] = mapped_column(Integer)
     last_sync_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
@@ -74,7 +70,7 @@ class Conflict(Base):
     local_value: Mapped[str | None] = mapped_column(Text)
     website_value: Mapped[str | None] = mapped_column(Text)
     status: Mapped[ConflictStatus] = mapped_column(
-        Enum(ConflictStatus, name="conflict_status", create_type=False),
+        Enum(ConflictStatus, name="conflict_status"),
         server_default="pending",
     )
     resolved_value: Mapped[str | None] = mapped_column(Text)
