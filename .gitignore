@@ -50,6 +50,13 @@ database/backups/
 .DS_Store
 Thumbs.db
 
+# Terraform
+infrastructure/.terraform/
+infrastructure/*.tfstate*
+infrastructure/.terraform.lock.hcl
+*.tfvars
+!*.tfvars.example
+
 # Logs
 *.log
 
