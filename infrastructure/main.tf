@@ -17,6 +17,8 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
+    "iam.googleapis.com",
+    "iamcredentials.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -218,9 +220,68 @@ resource "google_project_iam_member" "pipeline_cloudsql" {
 }
 
 # ─── CI/CD: Workload Identity Federation ─────────────────────────────────────
-# Bootstrapped via gcloud CLI (see infrastructure/bootstrap-wif.sh)
-# Not managed by Terraform to avoid the chicken-and-egg problem:
-# WIF must exist before GitHub Actions can run terraform apply.
+
+resource "google_service_account" "cicd" {
+  account_id   = "${local.name_prefix}-cicd"
+  display_name = "Momaverse CI/CD (GitHub Actions)"
+}
+
+resource "google_iam_workload_identity_pool" "github" {
+  workload_identity_pool_id = "${local.name_prefix}-github-pool"
+  display_name              = "GitHub Actions Pool"
+  description               = "OIDC federation for GitHub Actions"
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_iam_workload_identity_pool_provider" "github" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
+  workload_identity_pool_provider_id = "github"
+  display_name                       = "GitHub"
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.actor"      = "assertion.actor"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  attribute_condition = "assertion.repository == 'Anedu91/momaverse'"
+
+  oidc {
+    issuer_uri = "https://token.actions.githubusercontent.com"
+  }
+}
+
+resource "google_service_account_iam_member" "cicd_workload_identity" {
+  service_account_id = google_service_account.cicd.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/Anedu91/momaverse"
+}
+
+# CI/CD IAM: permissions for GitHub Actions deploys
+resource "google_project_iam_member" "cicd_artifact_registry" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${google_service_account.cicd.email}"
+}
+
+resource "google_project_iam_member" "cicd_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${google_service_account.cicd.email}"
+}
+
+resource "google_storage_bucket_iam_member" "cicd_frontend_storage" {
+  bucket = google_storage_bucket.frontend.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cicd.email}"
+}
+
+resource "google_project_iam_member" "cicd_service_account_user" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountUser"
+  member  = "serviceAccount:${google_service_account.cicd.email}"
+}
 
 # ─── Cloud Run: Backend ──────────────────────────────────────────────────────
 
