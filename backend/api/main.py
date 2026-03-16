@@ -34,5 +34,7 @@ def health() -> dict[str, str]:
 setup_admin(app)
 
 # Serve frontend static files — must be last so API routes take priority
+# Skipped in Docker where frontend is served from Cloud Storage
 _frontend_dir = Path(__file__).resolve().parent.parent.parent / "src"
-app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")
+if _frontend_dir.is_dir():
+    app.mount("/", StaticFiles(directory=_frontend_dir, html=True), name="frontend")

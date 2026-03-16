@@ -50,6 +50,12 @@ database/backups/
 .DS_Store
 Thumbs.db
 
+# Terraform
+infrastructure/.terraform/
+infrastructure/*.tfstate*
+*.tfvars
+!*.tfvars.example
+
 # Logs
 *.log
 
