@@ -36,7 +36,7 @@ class Website(TimestampMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text)
     disabled: Mapped[bool] = mapped_column(Boolean, server_default="false")
     source_type: Mapped[SourceType] = mapped_column(
-        Enum(SourceType, name="source_type", create_type=False),
+        Enum(SourceType, name="source_type"),
         server_default="primary",
     )
     crawl_after: Mapped[date | None] = mapped_column(Date)
@@ -59,7 +59,7 @@ class Website(TimestampMixin, Base):
     )
     process_images: Mapped[bool | None] = mapped_column(Boolean)
     crawl_mode: Mapped[CrawlMode] = mapped_column(
-        Enum(CrawlMode, name="crawl_mode", create_type=False),
+        Enum(CrawlMode, name="crawl_mode"),
         server_default="browser",
     )
     json_api_config: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
