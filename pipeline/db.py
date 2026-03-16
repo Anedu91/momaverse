@@ -29,7 +29,7 @@ DB_CONFIG = {
         "password": "",
     },
     "production": {
-        "host": "localhost",
+        "host": os.environ.get("PROD_DB_HOST", "localhost"),
         "dbname": os.environ.get("PROD_DB_NAME", "momaverse"),
         "user": os.environ.get("PROD_DB_USER", "momaverse"),
         "password": os.environ.get("PROD_DB_PASS", ""),
