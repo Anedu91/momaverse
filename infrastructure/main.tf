@@ -271,27 +271,15 @@ resource "google_project_iam_member" "cicd_run_admin" {
   member  = "serviceAccount:${google_service_account.cicd.email}"
 }
 
-resource "google_project_iam_member" "cicd_storage_admin" {
-  project = var.project_id
-  role    = "roles/storage.admin"
-  member  = "serviceAccount:${google_service_account.cicd.email}"
+resource "google_storage_bucket_iam_member" "cicd_frontend_storage" {
+  bucket = google_storage_bucket.frontend.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.cicd.email}"
 }
 
 resource "google_project_iam_member" "cicd_service_account_user" {
   project = var.project_id
   role    = "roles/iam.serviceAccountUser"
-  member  = "serviceAccount:${google_service_account.cicd.email}"
-}
-
-resource "google_project_iam_member" "cicd_secret_accessor" {
-  project = var.project_id
-  role    = "roles/secretmanager.secretAccessor"
-  member  = "serviceAccount:${google_service_account.cicd.email}"
-}
-
-resource "google_project_iam_member" "cicd_cloudsql_client" {
-  project = var.project_id
-  role    = "roles/cloudsql.client"
   member  = "serviceAccount:${google_service_account.cicd.email}"
 }
 
