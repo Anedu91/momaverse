@@ -17,3 +17,13 @@ output "db_instance_name" {
   description = "Cloud SQL instance connection name"
   value       = google_sql_database_instance.postgres.connection_name
 }
+
+output "cicd_service_account_email" {
+  description = "CI/CD service account email for GitHub Actions"
+  value       = google_service_account.cicd.email
+}
+
+output "workload_identity_provider" {
+  description = "Workload Identity Provider resource name for GitHub Actions auth"
+  value       = google_iam_workload_identity_pool_provider.github.name
+}
