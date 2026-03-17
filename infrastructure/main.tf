@@ -17,6 +17,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
+    "servicenetworking.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -259,6 +260,10 @@ resource "google_cloud_run_v2_service" "backend" {
       env {
         name  = "ENVIRONMENT"
         value = "production"
+      }
+      env {
+        name  = "CORS_ORIGINS"
+        value = "https://storage.googleapis.com"
       }
       env {
         name  = "DB_HOST"

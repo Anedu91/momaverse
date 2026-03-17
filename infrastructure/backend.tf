@@ -12,11 +12,10 @@ terraform {
     }
   }
 
-  # Uncomment after creating the bucket with: gsutil mb gs://momaverse-terraform-state
-  # backend "gcs" {
-  #   bucket = "momaverse-terraform-state"
-  #   prefix = "terraform/state"
-  # }
+  backend "gcs" {
+    bucket = "momaverse-terraform-state"
+    prefix = "terraform/state"
+  }
 }
 
 provider "google" {
