@@ -46,7 +46,11 @@ async function build(isDev) {
         throw new Error('No JS files found in index.html');
     }
 
-    // Concatenate JS: flatpickr first, then app modules in order
+    // Inject API_BASE_URL from environment (defaults to '' for relative URLs in local dev)
+    const apiBaseUrl = process.env.API_BASE_URL || '';
+    const apiBaseUrlDecl = `var API_BASE_URL = ${JSON.stringify(apiBaseUrl)};\n`;
+
+    // Concatenate JS: config, flatpickr, then app modules in order
     const flatpickrJs = fs.readFileSync(FLATPICKR_JS, 'utf8');
     let originalJsSize = 0;
     const appJs = jsFiles.map(f => {
@@ -55,7 +59,7 @@ async function build(isDev) {
         originalJsSize += Buffer.byteLength(content, 'utf8');
         return content;
     }).join('\n;\n');
-    const concatenated = flatpickrJs + '\n;\n' + appJs;
+    const concatenated = apiBaseUrlDecl + flatpickrJs + '\n;\n' + appJs;
 
     // Minify JS in prod, pass through in dev
     let jsContent;
