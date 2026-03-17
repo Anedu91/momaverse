@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 
+from api.config import get_settings
 from api.dependencies import (
     CurrentUserDep,
     SessionDep,
@@ -81,3 +82,29 @@ async def logout(_user: CurrentUserDep) -> Response:
 @router.get("/me", response_model=UserResponse)
 async def me(user: CurrentUserDep) -> UserResponse:
     return UserResponse.model_validate(user)
+
+
+@router.post("/promote-admin", status_code=status.HTTP_200_OK)
+async def promote_admin(
+    email: str,
+    api_key: str,
+    db: SessionDep,
+) -> dict[str, str]:
+    """Promote a user to admin. Secured by SYNC_API_KEY."""
+    settings = get_settings()
+    if api_key != settings.sync_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid API key",
+        )
+
+    user = await db.scalar(select(User).where(User.email == email))
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    user.is_admin = True
+    await db.commit()
+    return {"message": f"{email} is now an admin"}

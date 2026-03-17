@@ -14,6 +14,8 @@ WORKDIR /app
 
 COPY --from=builder /app/.venv /app/.venv
 COPY api/ ./api/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
 
 RUN adduser --disabled-password --no-create-home appuser
 USER appuser
@@ -21,4 +23,4 @@ USER appuser
 ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port 8080 --proxy-headers --forwarded-allow-ips='*'"]
