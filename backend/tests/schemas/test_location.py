@@ -1,4 +1,5 @@
 import pytest
+from api.models.base import LocationType
 from api.schemas.location import (
     LocationCreate,
     LocationDetailResponse,
@@ -120,3 +121,40 @@ def test_detail_with_relations():
     assert len(resp.alternate_names) == 1
     assert resp.alternate_names[0].alternate_name == "Museum of Modern Art"
     assert resp.tags[0].name == "museum"
+
+
+# ---------------------------------------------------------------------------
+# LocationType enum validation
+# ---------------------------------------------------------------------------
+
+
+def test_create_type_default_is_venue():
+    loc = LocationCreate(name="Test")
+    assert loc.type == LocationType.venue
+
+
+def test_create_type_accepts_valid_enum():
+    loc = LocationCreate(name="Test", type=LocationType.area)
+    assert loc.type == LocationType.area
+
+
+def test_create_type_accepts_string_value():
+    loc = LocationCreate(name="Test", type="meeting_point")  # type: ignore[arg-type]
+    assert loc.type == LocationType.meeting_point
+
+
+def test_create_type_rejects_invalid():
+    with pytest.raises(ValidationError):
+        LocationCreate(name="Test", type="invalid_type")  # type: ignore[arg-type]
+
+
+def test_update_type_accepts_enum():
+    update = LocationUpdate(type=LocationType.area)
+    assert update.type == LocationType.area
+
+
+def test_response_type_is_enum():
+    obj = make_location_obj(type="area")
+    resp = LocationResponse.model_validate(obj, from_attributes=True)
+    assert resp.type == LocationType.area
+    assert isinstance(resp.type, LocationType)

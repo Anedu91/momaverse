@@ -3,6 +3,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.models.base import LocationType
 from api.schemas.common import TagResponse
 
 __all__ = [
@@ -26,7 +27,7 @@ class LocationCreate(BaseModel):
     emoji: Annotated[str | None, Field(max_length=10)] = None
     alt_emoji: Annotated[str | None, Field(max_length=10)] = None
     website_url: Annotated[str | None, Field(max_length=500)] = None
-    type: str | None = None
+    type: LocationType = LocationType.venue
     alternate_names: list[str] = []
     tags: list[str] = []
 
@@ -42,7 +43,7 @@ class LocationUpdate(BaseModel):
     emoji: Annotated[str | None, Field(max_length=10)] = None
     alt_emoji: Annotated[str | None, Field(max_length=10)] = None
     website_url: Annotated[str | None, Field(max_length=500)] = None
-    type: str | None = None
+    type: LocationType | None = None
     alternate_names: list[str] | None = None
     tags: list[str] | None = None
 
@@ -61,7 +62,7 @@ class LocationResponse(BaseModel):
     emoji: str | None = None
     alt_emoji: str | None = None
     website_url: str | None = None
-    type: str = "venue"
+    type: LocationType = LocationType.venue
     created_at: datetime
     updated_at: datetime
 

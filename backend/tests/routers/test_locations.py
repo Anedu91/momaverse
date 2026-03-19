@@ -272,6 +272,28 @@ class TestCreateLocation:
         assert "nightlife" in tag_names
 
     @pytest.mark.asyncio
+    async def test_create_location_persists_website_url_and_type(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        # Arrange
+        payload = {
+            "name": "Typed Venue",
+            "website_url": "https://example.com",
+            "type": "area",
+        }
+
+        # Act
+        resp = await client.post(
+            "/api/v1/locations/", json=payload, headers=auth_headers
+        )
+
+        # Assert
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["website_url"] == "https://example.com"
+        assert body["type"] == "area"
+
+    @pytest.mark.asyncio
     async def test_create_location_requires_auth(self, client: AsyncClient) -> None:
         # Arrange
         payload = {"name": "Unauthorized Venue"}

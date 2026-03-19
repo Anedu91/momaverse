@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.admin import setup_admin
-from api.routers import auth, events, feed, locations
+from api.routers import auth, crawl_jobs, events, feed, locations, sources, tag_rules
 
 app = FastAPI(title="Momaverse API")
 
@@ -24,6 +24,9 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(locations.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(feed.router, prefix="/api/v1")
+app.include_router(sources.router, prefix="/api/v1")
+app.include_router(crawl_jobs.router, prefix="/api/v1")
+app.include_router(tag_rules.router, prefix="/api/v1")
 
 
 @app.get("/health")

@@ -11,7 +11,6 @@ from api.schemas.event import (
     EventCreate,
     EventDetailResponse,
     EventListItem,
-    EventUpdate,
 )
 from api.services.tags import get_or_create_tag
 
@@ -191,70 +190,6 @@ async def create_event(
     for tag_name in data.tags:
         tag = await get_or_create_tag(db, tag_name)
         db.add(EventTag(event_id=event.id, tag_id=tag.id))
-
-    await db.commit()
-    event = await _refresh_event(db, event.id)
-    return EventDetailResponse.model_validate(event)
-
-
-@router.put("/{event_id}", response_model=EventDetailResponse)
-async def update_event(
-    event_id: int,
-    data: EventUpdate,
-    db: SessionDep,
-    user: CurrentUserDep,
-) -> EventDetailResponse:
-    event = await _get_event_or_404(db, event_id)
-
-    update_fields = data.model_dump(exclude_unset=True)
-    scalar_fields = {
-        k: v
-        for k, v in update_fields.items()
-        if k not in ("occurrences", "urls", "tags")
-    }
-
-    # Validate location_id FK if being updated
-    if "location_id" in scalar_fields and scalar_fields["location_id"] is not None:
-        loc = await db.scalar(
-            select(Location.id).where(Location.id == scalar_fields["location_id"])
-        )
-        if loc is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Location {scalar_fields['location_id']} not found",
-            )
-
-    for field, value in scalar_fields.items():
-        setattr(event, field, value)
-
-    # Replace occurrences if provided
-    if "occurrences" in update_fields:
-        await db.execute(
-            delete(EventOccurrence).where(EventOccurrence.event_id == event.id)
-        )
-        for occ in data.occurrences:  # type: ignore[union-attr]
-            db.add(
-                EventOccurrence(
-                    event_id=event.id,
-                    start_date=occ.start_date,
-                    start_time=occ.start_time,
-                    end_date=occ.end_date,
-                    end_time=occ.end_time,
-                )
-            )
-
-    # Replace urls if provided
-    if "urls" in update_fields:
-        await db.execute(delete(EventUrl).where(EventUrl.event_id == event.id))
-        for url in data.urls:  # type: ignore[union-attr]
-            db.add(EventUrl(event_id=event.id, url=url))
-
-    # Replace tags if provided
-    if "tags" in update_fields:
-        await db.execute(delete(EventTag).where(EventTag.event_id == event.id))
-        for tag_name in data.tags or []:
-            tag = await get_or_create_tag(db, tag_name)
-            db.add(EventTag(event_id=event.id, tag_id=tag.id))
 
     await db.commit()
     event = await _refresh_event(db, event.id)

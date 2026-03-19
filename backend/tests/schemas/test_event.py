@@ -2,11 +2,11 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from api.models.base import EventStatus
 from api.schemas.event import (
     EventCreate,
     EventDetailResponse,
     EventResponse,
-    EventUpdate,
     OccurrenceSchema,
 )
 from pydantic import ValidationError
@@ -70,23 +70,7 @@ def test_create_name_max_length():
 
 
 # ---------------------------------------------------------------------------
-# EventUpdate
-# ---------------------------------------------------------------------------
-
-
-def test_update_all_optional():
-    update = EventUpdate()
-    assert update.name is None
-    assert update.status is None
-
-
-def test_update_partial():
-    update = EventUpdate(status="archived", reviewed=True)
-    assert update.status == "archived"
-
-
-# ---------------------------------------------------------------------------
-# EventResponse
+# EventResponse — status uses EventStatus enum
 # ---------------------------------------------------------------------------
 
 
@@ -94,7 +78,14 @@ def test_response_from_orm():
     obj = make_event_obj()
     resp = EventResponse.model_validate(obj, from_attributes=True)
     assert resp.id == 1
-    assert resp.status == "active"
+    assert resp.status == EventStatus.active
+
+
+def test_response_status_is_enum():
+    obj = make_event_obj(status="archived")
+    resp = EventResponse.model_validate(obj, from_attributes=True)
+    assert resp.status == EventStatus.archived
+    assert isinstance(resp.status, EventStatus)
 
 
 # ---------------------------------------------------------------------------
@@ -130,11 +121,6 @@ def test_create_url_at_max_length():
     url = "https://e.co/" + "x" * (2000 - len("https://e.co/"))
     ev = EventCreate(name="Show", location_id=1, urls=[url])
     assert len(ev.urls[0]) == 2000
-
-
-def test_update_url_max_length():
-    with pytest.raises(ValidationError):
-        EventUpdate(urls=["https://example.com/" + "x" * 2000])
 
 
 # ---------------------------------------------------------------------------

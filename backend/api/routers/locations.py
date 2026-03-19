@@ -116,6 +116,8 @@ async def create_location(
         lng=data.lng,
         emoji=data.emoji,
         alt_emoji=data.alt_emoji,
+        website_url=data.website_url,
+        type=data.type,
     )
     db.add(location)
     await db.flush()

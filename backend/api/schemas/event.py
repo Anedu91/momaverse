@@ -3,13 +3,13 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.models.base import EventStatus
 from api.schemas.common import TagResponse
 
 __all__ = [
     "OccurrenceSchema",
     "OccurrenceResponse",
     "EventCreate",
-    "EventUpdate",
     "EventResponse",
     "EventListItem",
     "EventUrlResponse",
@@ -46,20 +46,6 @@ class EventCreate(BaseModel):
     tags: list[str] = []
 
 
-class EventUpdate(BaseModel):
-    name: Annotated[str | None, Field(max_length=500)] = None
-    short_name: Annotated[str | None, Field(max_length=255)] = None
-    description: str | None = None
-    emoji: Annotated[str | None, Field(max_length=10)] = None
-    location_id: int | None = None
-    sublocation: Annotated[str | None, Field(max_length=255)] = None
-    status: str | None = None
-    reviewed: bool | None = None
-    occurrences: list[OccurrenceSchema] | None = None
-    urls: list[Annotated[str, Field(max_length=2000)]] | None = None
-    tags: list[str] | None = None
-
-
 class EventUrlResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,7 +63,7 @@ class EventResponse(BaseModel):
     emoji: str | None = None
     location_id: int
     sublocation: str | None = None
-    status: str = "active"
+    status: EventStatus = EventStatus.active
     reviewed: bool = False
     created_at: datetime
     updated_at: datetime
@@ -92,7 +78,7 @@ class EventListItem(BaseModel):
     emoji: str | None = None
     location_id: int
     location_display_name: str | None = None
-    status: str = "active"
+    status: EventStatus = EventStatus.active
     next_date: date | None = None
 
 
