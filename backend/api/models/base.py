@@ -1,9 +1,7 @@
 import enum
-import uuid as uuid_mod
 from datetime import datetime, timezone
 
-from sqlalchemy import TIMESTAMP, Boolean, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import TIMESTAMP, func
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -89,10 +87,15 @@ class CreatedAtMixin:
 
 
 class SoftDeleteMixin:
-    """Adds soft-delete capability. Use .active() to filter queries."""
+    """Adds soft-delete capability via deleted_at timestamp.
 
-    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    deleted_at: Mapped[datetime | None] = mapped_column(TIMESTAMP, nullable=True)
+    A record is considered deleted when deleted_at IS NOT NULL.
+    Use .active() to filter queries to non-deleted records.
+    """
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, nullable=True, default=None
+    )
 
     @classmethod
     def active(cls) -> ColumnElement[bool]:
@@ -100,28 +103,10 @@ class SoftDeleteMixin:
 
         Usage: select(Model).where(Model.active())
         """
-        return cls.is_deleted == False  # noqa: E712
+        return cls.deleted_at.is_(None)
 
     def soft_delete(self) -> None:
-        self.is_deleted = True
         self.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     def restore(self) -> None:
-        self.is_deleted = False
         self.deleted_at = None
-
-
-class VersionedMixin(SoftDeleteMixin):
-    """Version-based editing on top of soft-delete.
-
-    Each "edit" soft-deletes the current version and inserts a new row
-    sharing the same entity_id. Current version:
-        WHERE entity_id = X AND is_deleted = FALSE
-
-    entity_id is the stable external identity (APIs, FKs).
-    id (PK) is the row-level identity.
-    """
-
-    entity_id: Mapped[uuid_mod.UUID] = mapped_column(
-        UUID(as_uuid=True), default=uuid_mod.uuid4, index=True
-    )

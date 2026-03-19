@@ -9,7 +9,6 @@ from api.models.base import (
     SourceType,
     SyncSourceEnum,
     TagRuleType,
-    VersionedMixin,
 )
 from api.models.crawl import (
     CrawlEvent,
@@ -52,7 +51,6 @@ __all__ = [
     "TagRuleType",
     # Mixins
     "SoftDeleteMixin",
-    "VersionedMixin",
     # Models
     "Conflict",
     "CrawlEvent",
