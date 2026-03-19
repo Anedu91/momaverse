@@ -35,8 +35,9 @@ def test_occurrence_start_date_required():
 
 
 def test_create_valid_minimal():
-    ev = EventCreate(name="Art Show")
+    ev = EventCreate(name="Art Show", location_id=1)
     assert ev.name == "Art Show"
+    assert ev.location_id == 1
     assert ev.occurrences == []
 
 
@@ -44,8 +45,8 @@ def test_create_valid_full():
     ev = EventCreate(
         name="Art Show",
         short_name="Art",
-        emoji="🎨",
-        location_name="Gallery",
+        emoji="x",
+        location_id=1,
         occurrences=[OccurrenceSchema(start_date=date(2026, 4, 1), start_time="18:00")],
         urls=["https://example.com"],
         tags=["art"],
@@ -55,12 +56,17 @@ def test_create_valid_full():
 
 def test_create_name_required():
     with pytest.raises(ValidationError):
-        EventCreate()  # type: ignore[call-arg]
+        EventCreate(location_id=1)  # type: ignore[call-arg]
+
+
+def test_create_location_id_required():
+    with pytest.raises(ValidationError):
+        EventCreate(name="Art Show")  # type: ignore[call-arg]
 
 
 def test_create_name_max_length():
     with pytest.raises(ValidationError):
-        EventCreate(name="x" * 501)
+        EventCreate(name="x" * 501, location_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -71,12 +77,12 @@ def test_create_name_max_length():
 def test_update_all_optional():
     update = EventUpdate()
     assert update.name is None
-    assert update.archived is None
+    assert update.status is None
 
 
 def test_update_partial():
-    update = EventUpdate(archived=True, reviewed=True)
-    assert update.archived is True
+    update = EventUpdate(status="archived", reviewed=True)
+    assert update.status == "archived"
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +94,7 @@ def test_response_from_orm():
     obj = make_event_obj()
     resp = EventResponse.model_validate(obj, from_attributes=True)
     assert resp.id == 1
-    assert resp.archived is False
+    assert resp.status == "active"
 
 
 # ---------------------------------------------------------------------------
@@ -115,12 +121,14 @@ def test_detail_inherits_base_fields():
 
 def test_create_url_max_length():
     with pytest.raises(ValidationError):
-        EventCreate(name="Show", urls=["https://example.com/" + "x" * 2000])
+        EventCreate(
+            name="Show", location_id=1, urls=["https://example.com/" + "x" * 2000]
+        )
 
 
 def test_create_url_at_max_length():
     url = "https://e.co/" + "x" * (2000 - len("https://e.co/"))
-    ev = EventCreate(name="Show", urls=[url])
+    ev = EventCreate(name="Show", location_id=1, urls=[url])
     assert len(ev.urls[0]) == 2000
 
 
@@ -152,7 +160,6 @@ def test_detail_with_occurrences():
         start_time="18:00",
         end_date=None,
         end_time=None,
-        sort_order=0,
     )
     obj = make_event_obj(occurrences=[occ], urls=[], tags=[])
     resp = EventDetailResponse.model_validate(obj, from_attributes=True)
@@ -161,7 +168,7 @@ def test_detail_with_occurrences():
 
 
 def test_detail_with_urls():
-    url_obj = SimpleNamespace(id=1, url="https://example.com", sort_order=0)
+    url_obj = SimpleNamespace(id=1, url="https://example.com")
     obj = make_event_obj(occurrences=[], urls=[url_obj], tags=[])
     resp = EventDetailResponse.model_validate(obj, from_attributes=True)
     assert len(resp.urls) == 1

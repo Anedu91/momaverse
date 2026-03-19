@@ -11,8 +11,6 @@ from api.admin import setup_admin
 from api.admin.auth import AdminAuth
 from api.admin.views import (
     ALL_VIEWS,
-    EditAdmin,
-    FeedbackAdmin,
     UserAdmin,
 )
 from api.dependencies import hash_password
@@ -127,23 +125,9 @@ async def test_admin_auth_rejects_unknown_user() -> None:
     assert result is False
 
 
-def test_edit_admin_is_read_only() -> None:
-    """EditAdmin must not allow create, edit, or delete."""
-    assert EditAdmin.can_create is False
-    assert EditAdmin.can_edit is False
-    assert EditAdmin.can_delete is False
-
-
-def test_feedback_admin_is_read_only() -> None:
-    """FeedbackAdmin must not allow create, edit, or delete."""
-    assert FeedbackAdmin.can_create is False
-    assert FeedbackAdmin.can_edit is False
-    assert FeedbackAdmin.can_delete is False
-
-
 def test_all_admin_views_registered() -> None:
     """All expected admin views should be present in the ALL_VIEWS list."""
-    assert len(ALL_VIEWS) == 15
+    assert len(ALL_VIEWS) == 13
 
     from fastapi import FastAPI
     from unittest.mock import MagicMock

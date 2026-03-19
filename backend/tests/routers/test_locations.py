@@ -67,7 +67,7 @@ async def sample_location(db_session: AsyncSession) -> Location:
         description="A famous museum.",
         lat=40.7614,
         lng=-73.9776,
-        emoji="🏛️",
+        emoji="x",
     )
     db_session.add(location)
     await db_session.flush()
@@ -200,7 +200,6 @@ class TestGetLocationDetail:
         assert body["alternate_names"][0]["alternate_name"] == "MoMA NYC"
         assert len(body["tags"]) == 1
         assert body["tags"][0]["name"] == "art"
-        assert "websites" in body
 
     @pytest.mark.asyncio
     async def test_get_location_not_found(self, client: AsyncClient) -> None:
@@ -209,41 +208,6 @@ class TestGetLocationDetail:
 
         # Assert
         assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Get location history
-# ---------------------------------------------------------------------------
-
-
-class TestGetLocationHistory:
-    @pytest.mark.asyncio
-    async def test_get_history_requires_auth(
-        self, client: AsyncClient, sample_location: Location
-    ) -> None:
-        # Act — no auth header
-        resp = await client.get(f"/api/v1/locations/{sample_location.id}/history")
-
-        # Assert
-        assert resp.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_get_history_returns_edits(
-        self,
-        client: AsyncClient,
-        sample_location: Location,
-        auth_headers: dict[str, str],
-    ) -> None:
-        # Act
-        resp = await client.get(
-            f"/api/v1/locations/{sample_location.id}/history",
-            headers=auth_headers,
-        )
-
-        # Assert
-        assert resp.status_code == 200
-        body = resp.json()
-        assert isinstance(body, list)
 
 
 # ---------------------------------------------------------------------------

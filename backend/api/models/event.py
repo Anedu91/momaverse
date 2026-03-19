@@ -4,8 +4,9 @@ from sqlalchemy import (
     TIMESTAMP,
     Boolean,
     Date,
+    Enum,
     ForeignKey,
-    Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -14,7 +15,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import TimestampMixin
+from api.models.base import EventStatus, TimestampMixin
 
 
 class Event(TimestampMixin, Base):
@@ -25,21 +26,18 @@ class Event(TimestampMixin, Base):
     short_name: Mapped[str | None] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
     emoji: Mapped[str | None] = mapped_column(String(10))
-    location_id: Mapped[int | None] = mapped_column(
-        ForeignKey("locations.id", ondelete="SET NULL")
+    location_id: Mapped[int] = mapped_column(
+        ForeignKey("locations.id", ondelete="RESTRICT")
     )
-    location_name: Mapped[str | None] = mapped_column(String(255))
     sublocation: Mapped[str | None] = mapped_column(String(255))
-    website_id: Mapped[int | None] = mapped_column(
-        ForeignKey("websites.id", ondelete="SET NULL")
+    status: Mapped[EventStatus] = mapped_column(
+        Enum(EventStatus, name="event_status"),
+        server_default="active",
     )
-    archived: Mapped[bool] = mapped_column(Boolean, server_default="false")
-    suppressed: Mapped[bool] = mapped_column(Boolean, server_default="false")
     reviewed: Mapped[bool] = mapped_column(Boolean, server_default="false")
 
     # Relationships
     location: Mapped["Location"] = relationship(back_populates="events")
-    website: Mapped["Website"] = relationship(back_populates="events")
     occurrences: Mapped[list["EventOccurrence"]] = relationship(back_populates="event")
     urls: Mapped[list["EventUrl"]] = relationship(back_populates="event")
     tags: Mapped[list["Tag"]] = relationship(secondary="event_tags", viewonly=True)
@@ -55,7 +53,6 @@ class EventOccurrence(Base):
     start_time: Mapped[str | None] = mapped_column(String(20))
     end_date: Mapped[date | None] = mapped_column(Date)
     end_time: Mapped[str | None] = mapped_column(String(20))
-    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
 
     # Relationships
     event: Mapped["Event"] = relationship(back_populates="occurrences")
@@ -67,7 +64,6 @@ class EventUrl(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
     url: Mapped[str] = mapped_column(String(2000))
-    sort_order: Mapped[int] = mapped_column(Integer, server_default="0")
 
     # Relationships
     event: Mapped["Event"] = relationship(back_populates="urls")
@@ -75,22 +71,26 @@ class EventUrl(Base):
 
 class EventTag(Base):
     __tablename__ = "event_tags"
-    __table_args__ = (UniqueConstraint("event_id", "tag_id"),)
 
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
-    tag_id: Mapped[int] = mapped_column(ForeignKey("tags.id", ondelete="CASCADE"))
+    event_id: Mapped[int] = mapped_column(
+        ForeignKey("events.id", ondelete="CASCADE"), primary_key=True
+    )
+    tag_id: Mapped[int] = mapped_column(
+        ForeignKey("tags.id", ondelete="CASCADE"), primary_key=True
+    )
 
 
 class EventSource(Base):
     __tablename__ = "event_sources"
-    __table_args__ = (UniqueConstraint("event_id", "crawl_event_id"),)
+    __table_args__ = (UniqueConstraint("event_id", "extracted_event_id"),)
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     event_id: Mapped[int] = mapped_column(ForeignKey("events.id", ondelete="CASCADE"))
-    crawl_event_id: Mapped[int] = mapped_column(
-        ForeignKey("crawl_events.id", ondelete="CASCADE")
+    extracted_event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("extracted_events.id", ondelete="CASCADE")
     )
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"))
+    trust_score: Mapped[float | None] = mapped_column(Numeric(2, 1, asdecimal=False))
     is_primary: Mapped[bool] = mapped_column(Boolean, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, server_default=func.current_timestamp()
@@ -98,4 +98,6 @@ class EventSource(Base):
 
     # Relationships
     event: Mapped["Event"] = relationship(back_populates="sources")
-    crawl_event: Mapped["CrawlEvent"] = relationship(back_populates="event_sources")
+    extracted_event: Mapped["ExtractedEvent"] = relationship(
+        back_populates="event_sources"
+    )

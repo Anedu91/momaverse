@@ -31,7 +31,7 @@ def test_create_valid_full():
         short_name="MoMA",
         lat=40.7614,
         lng=-73.9776,
-        emoji="🎨",
+        emoji="x",
         alternate_names=["Museum of Modern Art"],
         tags=["museum", "art"],
     )

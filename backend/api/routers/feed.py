@@ -5,6 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from api.dependencies import SessionDep
+from api.models.base import EventStatus
 from api.models.event import Event, EventOccurrence
 from api.models.location import Location
 
@@ -30,8 +31,7 @@ async def feed_events(db: SessionDep) -> list[dict[str, object]]:
         select(Event)
         .where(
             Event.id.in_(select(event_ids_sq.c.event_id)),
-            Event.archived.is_(False),
-            Event.suppressed.is_(False),
+            Event.status == EventStatus.active,
         )
         .options(
             selectinload(Event.occurrences),
@@ -54,7 +54,7 @@ async def feed_events(db: SessionDep) -> list[dict[str, object]]:
                 occ.end_date.isoformat() if occ.end_date else None,
                 occ.end_time,
             ]
-            for occ in sorted(ev.occurrences, key=lambda o: (o.sort_order, o.id))
+            for occ in sorted(ev.occurrences, key=lambda o: o.id)
         ]
 
         out.append(
@@ -63,15 +63,13 @@ async def feed_events(db: SessionDep) -> list[dict[str, object]]:
                 "short_name": ev.short_name,
                 "description": ev.description,
                 "emoji": ev.emoji,
-                "location": loc.name if loc else ev.location_name,
+                "location": loc.name if loc else None,
                 "sublocation": ev.sublocation,
                 "lat": loc.lat if loc else None,
                 "lng": loc.lng if loc else None,
                 "tags": [t.name for t in ev.tags],
                 "occurrences": occurrences,
-                "urls": [
-                    u.url for u in sorted(ev.urls, key=lambda u: (u.sort_order, u.id))
-                ],
+                "urls": [u.url for u in sorted(ev.urls, key=lambda u: u.id)],
             }
         )
 

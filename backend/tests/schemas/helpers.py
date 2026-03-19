@@ -20,6 +20,8 @@ def make_location_obj(**overrides: Any) -> SimpleNamespace:
         lng=-74.0,
         emoji=None,
         alt_emoji=None,
+        website_url=None,
+        type="venue",
         created_at=now,
         updated_at=now,
     )
@@ -35,29 +37,10 @@ def make_event_obj(**overrides: Any) -> SimpleNamespace:
         short_name=None,
         description=None,
         emoji=None,
-        location_id=None,
-        location_name=None,
+        location_id=1,
         sublocation=None,
-        website_id=None,
-        archived=False,
-        suppressed=False,
+        status="active",
         reviewed=False,
-        created_at=now,
-        updated_at=now,
-    )
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
-
-
-def make_website_obj(**overrides: Any) -> SimpleNamespace:
-    now = make_timestamp()
-    defaults = dict(
-        id=1,
-        name="Test Website",
-        description=None,
-        base_url="https://example.com",
-        max_pages=30,
-        disabled=False,
         created_at=now,
         updated_at=now,
     )
@@ -78,26 +61,6 @@ def make_user_obj(**overrides: Any) -> SimpleNamespace:
     return SimpleNamespace(**defaults)
 
 
-def make_edit_obj(**overrides: Any) -> SimpleNamespace:
-    now = make_timestamp()
-    defaults = dict(
-        id=1,
-        edit_uuid="abc-123",
-        table_name="events",
-        record_id=42,
-        field_name="name",
-        action="UPDATE",
-        old_value="Old",
-        new_value="New",
-        source="local",
-        user_id=1,
-        created_at=now,
-        applied_at=None,
-    )
-    defaults.update(overrides)
-    return SimpleNamespace(**defaults)
-
-
 def make_tag_obj(id: int = 1, name: str = "test-tag") -> SimpleNamespace:
     return SimpleNamespace(id=id, name=name)
 
@@ -106,7 +69,6 @@ def make_alternate_name_obj(**overrides: Any) -> SimpleNamespace:
     defaults = dict(
         id=1,
         alternate_name="Alternate Name",
-        website_id=None,
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

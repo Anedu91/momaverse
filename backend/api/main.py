@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from api.admin import setup_admin
-from api.routers import auth, events, feed, feedback, locations, websites
+from api.routers import auth, events, feed, locations
 
 app = FastAPI(title="Momaverse API")
 
@@ -21,9 +21,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/v1")
-app.include_router(feedback.router, prefix="/api/v1")
 app.include_router(locations.router, prefix="/api/v1")
-app.include_router(websites.router, prefix="/api/v1")
 app.include_router(events.router, prefix="/api/v1")
 app.include_router(feed.router, prefix="/api/v1")
 

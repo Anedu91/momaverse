@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Response, status
+from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
@@ -6,21 +6,13 @@ from api.dependencies import CurrentUserDep, SessionDep
 from api.models.event import Event
 from api.models.location import Location, LocationAlternateName, LocationTag
 from api.schemas.common import PaginatedResponse
-from api.schemas.edit import EditResponse
 from api.schemas.location import (
     LocationCreate,
     LocationDetailResponse,
     LocationListItem,
     LocationUpdate,
 )
-from api.services.edit_logger import (
-    get_record_history,
-    log_delete,
-    log_insert,
-    log_updates,
-)
 from api.services.tags import get_or_create_tag
-from api.services.utils import extract_editor_context, snapshot_record
 
 router = APIRouter(prefix="/locations", tags=["locations"])
 
@@ -33,7 +25,6 @@ async def _refresh_location(db: SessionDep, location_id: int) -> Location:
         .options(
             selectinload(Location.alternate_names),
             selectinload(Location.tags),
-            selectinload(Location.websites),
         )
         .execution_options(populate_existing=True)
     )
@@ -50,7 +41,6 @@ async def _get_location_or_404(db: SessionDep, location_id: int) -> Location:
         .options(
             selectinload(Location.alternate_names),
             selectinload(Location.tags),
-            selectinload(Location.websites),
         )
     )
     location = await db.scalar(stmt)
@@ -62,8 +52,6 @@ async def _get_location_or_404(db: SessionDep, location_id: int) -> Location:
 @router.get("/", response_model=PaginatedResponse[LocationListItem])
 async def list_locations(
     db: SessionDep,
-    # TODO: Add upper bound validation (e.g. Query(ge=1, le=200)) to prevent
-    # unbounded queries that could exhaust memory.
     limit: int = 50,
     offset: int = 0,
 ) -> PaginatedResponse[LocationListItem]:
@@ -110,22 +98,11 @@ async def get_location(
     return LocationDetailResponse.model_validate(location)
 
 
-@router.get("/{location_id}/history", response_model=list[EditResponse])
-async def get_location_history(
-    location_id: int,
-    db: SessionDep,
-    _user: CurrentUserDep,
-) -> list[EditResponse]:
-    edits = await get_record_history(db, table_name="locations", record_id=location_id)
-    return [EditResponse.model_validate(e) for e in edits]
-
-
 @router.post(
     "/", response_model=LocationDetailResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_location(
     data: LocationCreate,
-    request: Request,
     db: SessionDep,
     user: CurrentUserDep,
 ) -> LocationDetailResponse:
@@ -150,18 +127,6 @@ async def create_location(
         tag = await get_or_create_tag(db, tag_name)
         db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_insert(
-        db,
-        table_name="locations",
-        record_id=location.id,
-        record_data=snapshot_record(location),
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
-
     await db.commit()
     location = await _refresh_location(db, location.id)
     return LocationDetailResponse.model_validate(location)
@@ -171,12 +136,10 @@ async def create_location(
 async def update_location(
     location_id: int,
     data: LocationUpdate,
-    request: Request,
     db: SessionDep,
     user: CurrentUserDep,
 ) -> LocationDetailResponse:
     location = await _get_location_or_404(db, location_id)
-    old_data = snapshot_record(location)
 
     # Apply scalar updates
     update_fields = data.model_dump(exclude_unset=True)
@@ -207,20 +170,6 @@ async def update_location(
             tag = await get_or_create_tag(db, tag_name)
             db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
-    new_data = snapshot_record(location)
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_updates(
-        db,
-        table_name="locations",
-        record_id=location.id,
-        old_record=old_data,
-        new_record=new_data,
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
-
     await db.commit()
     location = await _refresh_location(db, location.id)
     return LocationDetailResponse.model_validate(location)
@@ -229,7 +178,6 @@ async def update_location(
 @router.delete("/{location_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_location(
     location_id: int,
-    request: Request,
     db: SessionDep,
     user: CurrentUserDep,
 ) -> Response:
@@ -244,19 +192,6 @@ async def delete_location(
             status_code=status.HTTP_409_CONFLICT,
             detail="Cannot delete location with associated events",
         )
-
-    record_data = snapshot_record(location)
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_delete(
-        db,
-        table_name="locations",
-        record_id=location.id,
-        record_data=record_data,
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
 
     # Delete children before parent (ORM delete doesn't use DB CASCADE)
     await db.execute(

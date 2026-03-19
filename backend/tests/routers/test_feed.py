@@ -6,6 +6,7 @@ from datetime import date, timedelta
 import pytest
 import pytest_asyncio
 from api.database import get_db
+from api.models.base import EventStatus
 from api.models.event import Event, EventOccurrence
 from api.models.location import Location
 from api.routers.feed import router
@@ -54,8 +55,7 @@ class TestFeedEvents:
         event = Event(
             name="Test Event",
             location_id=location.id,
-            archived=False,
-            suppressed=False,
+            status=EventStatus.active,
         )
         db_session.add(event)
         await db_session.flush()
@@ -64,7 +64,6 @@ class TestFeedEvents:
         occurrence = EventOccurrence(
             event_id=event.id,
             start_date=tomorrow,
-            sort_order=0,
         )
         db_session.add(occurrence)
         await db_session.flush()
@@ -98,7 +97,7 @@ class TestFeedLocations:
             name="Test Location",
             lat=40.7128,
             lng=-74.0060,
-            emoji="📍",
+            emoji="x",
             address="123 Test St",
         )
         db_session.add(location)
