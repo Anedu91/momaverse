@@ -32,6 +32,7 @@ async def feed_events(db: SessionDep) -> list[dict[str, object]]:
         .where(
             Event.id.in_(select(event_ids_sq.c.event_id)),
             Event.status == EventStatus.active,
+            Event.active(),
         )
         .options(
             selectinload(Event.occurrences),
@@ -81,7 +82,7 @@ async def feed_locations(db: SessionDep) -> list[dict[str, object]]:
     """Return locations for the public frontend map (flat JSON array)."""
     stmt = (
         select(Location)
-        .where(Location.lat.isnot(None), Location.lng.isnot(None))
+        .where(Location.lat.isnot(None), Location.lng.isnot(None), Location.active())
         .options(selectinload(Location.tags))
     )
 

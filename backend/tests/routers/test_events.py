@@ -407,3 +407,115 @@ class TestDeleteEvent:
 
         # Assert
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete behavior
+# ---------------------------------------------------------------------------
+
+
+class TestSoftDeleteEvent:
+    @pytest.mark.asyncio
+    async def test_delete_event_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_event: Event,
+    ) -> None:
+        # Act
+        resp = await client.delete(f"{PREFIX}/{sample_event.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Assert — record still exists with deleted_at set
+        await db_session.refresh(sample_event)
+        assert sample_event.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_events_excludes_deleted_by_default(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange
+        e1 = Event(name="Active Event", location_id=sample_location.id)
+        e2 = Event(name="Deleted Event", location_id=sample_location.id)
+        db_session.add_all([e1, e2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{e2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/")
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Event" in names
+        assert "Deleted Event" not in names
+
+    @pytest.mark.asyncio
+    async def test_list_events_includes_deleted_when_requested(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange
+        e1 = Event(name="Active Event 2", location_id=sample_location.id)
+        e2 = Event(name="Deleted Event 2", location_id=sample_location.id)
+        db_session.add_all([e1, e2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{e2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/", params={"include_deleted": True})
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Event 2" in names
+        assert "Deleted Event 2" in names
+
+    @pytest.mark.asyncio
+    async def test_get_deleted_event_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_event: Event,
+    ) -> None:
+        # Arrange
+        resp = await client.delete(f"{PREFIX}/{sample_event.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/{sample_event.id}")
+
+        # Assert
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_create_event_with_soft_deleted_location_returns_422(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange — soft-delete the location
+        sample_location.soft_delete()
+        await db_session.flush()
+
+        # Act
+        payload = {"name": "Bad Event", "location_id": sample_location.id}
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 422
+        assert "Location" in resp.json()["detail"]

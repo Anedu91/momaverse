@@ -16,10 +16,10 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import CrawlMode, SourceType, TimestampMixin
+from api.models.base import CrawlMode, SoftDeleteMixin, SourceType, TimestampMixin
 
 
-class Source(TimestampMixin, Base):
+class Source(SoftDeleteMixin, TimestampMixin, Base):
     __tablename__ = "sources"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -38,7 +38,7 @@ class Source(TimestampMixin, Base):
     crawl_results: Mapped[list["CrawlResult"]] = relationship(back_populates="source")
 
 
-class SourceUrl(Base):
+class SourceUrl(SoftDeleteMixin, Base):
     __tablename__ = "source_urls"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
 from api.dependencies import CurrentUserDep, SessionDep
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 async def _get_source_or_404(db: SessionDep, source_id: int) -> Source:
     stmt = (
         select(Source)
-        .where(Source.id == source_id)
+        .where(Source.id == source_id, Source.active())
         .options(
             selectinload(Source.urls),
             selectinload(Source.crawl_config),
@@ -57,9 +57,14 @@ async def list_sources(
     user: CurrentUserDep,
     limit: int = 50,
     offset: int = 0,
+    include_deleted: bool = False,
 ) -> PaginatedResponse[SourceListItem]:
     stmt = select(Source).order_by(Source.name).limit(limit).offset(offset)
     count_stmt = select(func.count(Source.id))
+
+    if not include_deleted:
+        stmt = stmt.where(Source.active())
+        count_stmt = count_stmt.where(Source.active())
 
     result = await db.execute(stmt)
     sources = result.scalars().all()
@@ -146,10 +151,7 @@ async def delete_source(
 ) -> Response:
     source = await _get_source_or_404(db, source_id)
 
-    # Delete children before parent
-    await db.execute(delete(SourceUrl).where(SourceUrl.source_id == source.id))
-    await db.execute(delete(CrawlConfig).where(CrawlConfig.source_id == source.id))
-    await db.delete(source)
+    source.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -230,11 +232,12 @@ async def delete_source_url(
         select(SourceUrl).where(
             SourceUrl.id == url_id,
             SourceUrl.source_id == source_id,
+            SourceUrl.active(),
         )
     )
     if url is None:
         raise HTTPException(status_code=404, detail="URL not found")
 
-    await db.delete(url)
+    url.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

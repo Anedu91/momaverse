@@ -2,10 +2,10 @@ from sqlalchemy import Enum, ForeignKey, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import LocationType, TimestampMixin
+from api.models.base import LocationType, SoftDeleteMixin, TimestampMixin
 
 
-class Location(TimestampMixin, Base):
+class Location(SoftDeleteMixin, TimestampMixin, Base):
     __tablename__ = "locations"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

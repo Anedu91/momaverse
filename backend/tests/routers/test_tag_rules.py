@@ -207,3 +207,103 @@ class TestDeleteTagRule:
     ) -> None:
         resp = await client.delete(f"{PREFIX}/{sample_tag_rule.id}")
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete behavior
+# ---------------------------------------------------------------------------
+
+
+class TestSoftDeleteTagRule:
+    @pytest.mark.asyncio
+    async def test_delete_tag_rule_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_tag_rule: TagRule,
+    ) -> None:
+        # Act
+        resp = await client.delete(
+            f"{PREFIX}/{sample_tag_rule.id}", headers=auth_headers
+        )
+        assert resp.status_code == 204
+
+        # Assert — record still exists with deleted_at set
+        await db_session.refresh(sample_tag_rule)
+        assert sample_tag_rule.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_tag_rules_excludes_deleted_by_default(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange
+        r1 = TagRule(rule_type="rewrite", pattern="keep-me", replacement="kept")
+        r2 = TagRule(rule_type="exclude", pattern="delete-me")
+        db_session.add_all([r1, r2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{r2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/", headers=auth_headers)
+        body = resp.json()
+
+        # Assert
+        patterns = [item["pattern"] for item in body]
+        assert "keep-me" in patterns
+        assert "delete-me" not in patterns
+
+    @pytest.mark.asyncio
+    async def test_list_tag_rules_includes_deleted_when_requested(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange
+        r1 = TagRule(rule_type="rewrite", pattern="keep-me-2", replacement="kept")
+        r2 = TagRule(rule_type="exclude", pattern="delete-me-2")
+        db_session.add_all([r1, r2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{r2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(
+            f"{PREFIX}/", headers=auth_headers, params={"include_deleted": True}
+        )
+        body = resp.json()
+
+        # Assert
+        patterns = [item["pattern"] for item in body]
+        assert "keep-me-2" in patterns
+        assert "delete-me-2" in patterns
+
+    @pytest.mark.asyncio
+    async def test_update_deleted_tag_rule_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_tag_rule: TagRule,
+    ) -> None:
+        # Arrange — delete the rule
+        resp = await client.delete(
+            f"{PREFIX}/{sample_tag_rule.id}", headers=auth_headers
+        )
+        assert resp.status_code == 204
+
+        # Act — try to update it
+        resp = await client.put(
+            f"{PREFIX}/{sample_tag_rule.id}",
+            json={"pattern": "updated"},
+            headers=auth_headers,
+        )
+
+        # Assert
+        assert resp.status_code == 404

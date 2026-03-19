@@ -65,6 +65,7 @@ class LocationResponse(BaseModel):
     type: LocationType = LocationType.venue
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
 
 class AlternateNameResponse(BaseModel):
@@ -83,6 +84,7 @@ class LocationListItem(BaseModel):
     very_short_name: str | None = None
     emoji: str | None = None
     event_count: int = 0
+    deleted_at: datetime | None = None
 
 
 class LocationDetailResponse(LocationResponse):

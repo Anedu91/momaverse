@@ -354,3 +354,138 @@ class TestSourceUrls:
             headers=auth_headers,
         )
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete behavior
+# ---------------------------------------------------------------------------
+
+
+class TestSoftDeleteSource:
+    @pytest.mark.asyncio
+    async def test_delete_source_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_source: Source,
+    ) -> None:
+        # Act
+        resp = await client.delete(f"{PREFIX}/{sample_source.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Assert — record still exists in DB with deleted_at set
+        await db_session.refresh(sample_source)
+        assert sample_source.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_sources_excludes_deleted_by_default(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange — create 2 sources, delete one
+        s1 = Source(name="Active Source", type="crawler")
+        s2 = Source(name="Deleted Source", type="crawler")
+        db_session.add_all([s1, s2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{s2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/", headers=auth_headers)
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Source" in names
+        assert "Deleted Source" not in names
+
+    @pytest.mark.asyncio
+    async def test_list_sources_includes_deleted_when_requested(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange
+        s1 = Source(name="Active Source 2", type="crawler")
+        s2 = Source(name="Deleted Source 2", type="crawler")
+        db_session.add_all([s1, s2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{s2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(
+            f"{PREFIX}/", headers=auth_headers, params={"include_deleted": True}
+        )
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Source 2" in names
+        assert "Deleted Source 2" in names
+
+    @pytest.mark.asyncio
+    async def test_get_deleted_source_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_source: Source,
+    ) -> None:
+        # Arrange — delete the source
+        resp = await client.delete(f"{PREFIX}/{sample_source.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/{sample_source.id}", headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delete_source_url_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_source: Source,
+    ) -> None:
+        # Arrange
+        url = SourceUrl(
+            source_id=sample_source.id, url="https://soft-delete.com", sort_order=0
+        )
+        db_session.add(url)
+        await db_session.flush()
+
+        # Act
+        resp = await client.delete(
+            f"{PREFIX}/{sample_source.id}/urls/{url.id}",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 204
+
+        # Assert — record still exists with deleted_at set
+        await db_session.refresh(url)
+        assert url.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_delete_already_deleted_source_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_source: Source,
+    ) -> None:
+        # Arrange — delete once
+        resp = await client.delete(f"{PREFIX}/{sample_source.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act — try to delete again
+        resp = await client.delete(f"{PREFIX}/{sample_source.id}", headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 404

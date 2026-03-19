@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from api.dependencies import CurrentUserDep, SessionDep
@@ -39,7 +39,7 @@ async def _refresh_event(db: SessionDep, event_id: int) -> Event:
 async def _get_event_or_404(db: SessionDep, event_id: int) -> Event:
     stmt = (
         select(Event)
-        .where(Event.id == event_id)
+        .where(Event.id == event_id, Event.active())
         .options(
             selectinload(Event.occurrences),
             selectinload(Event.urls),
@@ -61,6 +61,7 @@ async def list_events(
     upcoming: bool = False,
     location_id: int | None = None,
     status_filter: EventStatus | None = None,
+    include_deleted: bool = False,
 ) -> PaginatedResponse[EventListItem]:
     next_date_sq = (
         select(func.min(EventOccurrence.start_date))
@@ -85,6 +86,11 @@ async def list_events(
 
     # Build count query with same filters
     count_stmt = select(func.count(Event.id))
+
+    # Apply soft-delete filter
+    if not include_deleted:
+        stmt = stmt.where(Event.active())
+        count_stmt = count_stmt.where(Event.active())
 
     # Apply filters
     if upcoming:
@@ -154,8 +160,10 @@ async def create_event(
     db: SessionDep,
     user: CurrentUserDep,
 ) -> EventDetailResponse:
-    # Validate FK reference
-    loc = await db.scalar(select(Location.id).where(Location.id == data.location_id))
+    # Validate FK reference (reject soft-deleted locations)
+    loc = await db.scalar(
+        select(Location.id).where(Location.id == data.location_id, Location.active())
+    )
     if loc is None:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -204,12 +212,6 @@ async def delete_event(
 ) -> Response:
     event = await _get_event_or_404(db, event_id)
 
-    # Delete children before parent (ORM delete doesn't use DB CASCADE)
-    await db.execute(
-        delete(EventOccurrence).where(EventOccurrence.event_id == event.id)
-    )
-    await db.execute(delete(EventUrl).where(EventUrl.event_id == event.id))
-    await db.execute(delete(EventTag).where(EventTag.event_id == event.id))
-    await db.delete(event)
+    event.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

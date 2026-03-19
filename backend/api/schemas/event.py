@@ -67,6 +67,7 @@ class EventResponse(BaseModel):
     reviewed: bool = False
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
 
 class EventListItem(BaseModel):
@@ -80,6 +81,7 @@ class EventListItem(BaseModel):
     location_display_name: str | None = None
     status: EventStatus = EventStatus.active
     next_date: date | None = None
+    deleted_at: datetime | None = None
 
 
 class EventDetailResponse(EventResponse):

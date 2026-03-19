@@ -37,7 +37,7 @@ async def _refresh_location(db: SessionDep, location_id: int) -> Location:
 async def _get_location_or_404(db: SessionDep, location_id: int) -> Location:
     stmt = (
         select(Location)
-        .where(Location.id == location_id)
+        .where(Location.id == location_id, Location.active())
         .options(
             selectinload(Location.alternate_names),
             selectinload(Location.tags),
@@ -54,10 +54,11 @@ async def list_locations(
     db: SessionDep,
     limit: int = 50,
     offset: int = 0,
+    include_deleted: bool = False,
 ) -> PaginatedResponse[LocationListItem]:
     event_count_sq = (
         select(func.count(Event.id))
-        .where(Event.location_id == Location.id)
+        .where(Event.location_id == Location.id, Event.active())
         .correlate(Location)
         .scalar_subquery()
         .label("event_count")
@@ -70,6 +71,10 @@ async def list_locations(
         .offset(offset)
     )
     total_stmt = select(func.count(Location.id))
+
+    if not include_deleted:
+        stmt = stmt.where(Location.active())
+        total_stmt = total_stmt.where(Location.active())
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -185,23 +190,6 @@ async def delete_location(
 ) -> Response:
     location = await _get_location_or_404(db, location_id)
 
-    # Delete guard: check if any events reference this location
-    event_count = await db.scalar(
-        select(func.count(Event.id)).where(Event.location_id == location_id)
-    )
-    if event_count:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot delete location with associated events",
-        )
-
-    # Delete children before parent (ORM delete doesn't use DB CASCADE)
-    await db.execute(
-        delete(LocationAlternateName).where(
-            LocationAlternateName.location_id == location.id
-        )
-    )
-    await db.execute(delete(LocationTag).where(LocationTag.location_id == location.id))
-    await db.delete(location)
+    location.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

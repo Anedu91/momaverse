@@ -32,6 +32,7 @@ class SourceUrlResponse(BaseModel):
     url: str
     js_code: str | None = None
     sort_order: int = 0
+    deleted_at: datetime | None = None
 
 
 class SourceUrlCreate(BaseModel):
@@ -149,6 +150,7 @@ class SourceResponse(BaseModel):
     disabled: bool = False
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
 
 class SourceDetailResponse(SourceResponse):
@@ -180,3 +182,4 @@ class SourceListItem(BaseModel):
     type: SourceType
     trust_level: float | None = None
     disabled: bool = False
+    deleted_at: datetime | None = None

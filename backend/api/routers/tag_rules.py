@@ -12,8 +12,13 @@ router = APIRouter(prefix="/tag-rules", tags=["tag-rules"])
 async def list_tag_rules(
     db: SessionDep,
     user: CurrentUserDep,
+    include_deleted: bool = False,
 ) -> list[TagRuleResponse]:
     stmt = select(TagRule).order_by(TagRule.id)
+
+    if not include_deleted:
+        stmt = stmt.where(TagRule.active())
+
     result = await db.execute(stmt)
     rules = result.scalars().all()
     return [TagRuleResponse.model_validate(r) for r in rules]
@@ -43,7 +48,9 @@ async def update_tag_rule(
     db: SessionDep,
     user: CurrentUserDep,
 ) -> TagRuleResponse:
-    rule = await db.scalar(select(TagRule).where(TagRule.id == rule_id))
+    rule = await db.scalar(
+        select(TagRule).where(TagRule.id == rule_id, TagRule.active())
+    )
     if rule is None:
         raise HTTPException(status_code=404, detail="Tag rule not found")
 
@@ -62,10 +69,12 @@ async def delete_tag_rule(
     db: SessionDep,
     user: CurrentUserDep,
 ) -> Response:
-    rule = await db.scalar(select(TagRule).where(TagRule.id == rule_id))
+    rule = await db.scalar(
+        select(TagRule).where(TagRule.id == rule_id, TagRule.active())
+    )
     if rule is None:
         raise HTTPException(status_code=404, detail="Tag rule not found")
 
-    await db.delete(rule)
+    rule.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

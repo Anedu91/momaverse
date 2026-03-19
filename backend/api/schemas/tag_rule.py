@@ -20,6 +20,7 @@ class TagRuleResponse(BaseModel):
     pattern: str
     replacement: str | None = None
     created_at: datetime
+    deleted_at: datetime | None = None
 
 
 class TagRuleCreate(BaseModel):

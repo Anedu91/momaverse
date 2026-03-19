@@ -15,10 +15,10 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import EventStatus, TimestampMixin
+from api.models.base import EventStatus, SoftDeleteMixin, TimestampMixin
 
 
-class Event(TimestampMixin, Base):
+class Event(SoftDeleteMixin, TimestampMixin, Base):
     __tablename__ = "events"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)

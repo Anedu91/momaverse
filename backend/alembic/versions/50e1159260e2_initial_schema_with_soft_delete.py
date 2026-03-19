@@ -1,8 +1,8 @@
-"""initial schema with separated source location event domains
+"""initial schema with soft delete
 
-Revision ID: 617b46069811
+Revision ID: 50e1159260e2
 Revises:
-Create Date: 2026-03-19 20:24:25.526756
+Create Date: 2026-03-19 22:29:31.664191
 
 """
 
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
-revision: str = "617b46069811"
+revision: str = "50e1159260e2"
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -57,6 +57,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.Column("disabled", sa.Boolean(), server_default="false", nullable=False),
+        sa.Column("deleted_at", sa.TIMESTAMP(), nullable=True),
         sa.Column(
             "created_at",
             sa.TIMESTAMP(),
@@ -133,6 +134,7 @@ def upgrade() -> None:
         sa.Column("url", sa.String(length=2000), nullable=False),
         sa.Column("js_code", sa.Text(), nullable=True),
         sa.Column("sort_order", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("deleted_at", sa.TIMESTAMP(), nullable=True),
         sa.ForeignKeyConstraint(["source_id"], ["sources.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -176,33 +178,19 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["location_id"], ["locations.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.drop_index(op.f("idx_crawl_events_content_hash"), table_name="crawl_events")
-    op.drop_index(op.f("idx_crawl_events_crawl_result"), table_name="crawl_events")
-    op.drop_index(op.f("idx_crawl_events_location_id"), table_name="crawl_events")
-    op.drop_index(op.f("idx_crawl_events_location_name"), table_name="crawl_events")
-    op.drop_index(op.f("idx_crawl_events_name"), table_name="crawl_events")
-    op.drop_table("crawl_events")
-    op.drop_index(op.f("idx_conflicts_created"), table_name="conflicts")
-    op.drop_index(op.f("idx_conflicts_status"), table_name="conflicts")
-    op.drop_index(op.f("idx_conflicts_table_record"), table_name="conflicts")
-    op.drop_table("conflicts")
-    op.drop_index(op.f("idx_feedback_created_at"), table_name="feedback")
-    op.drop_table("feedback")
-    op.drop_table("location_instagram")
-    op.drop_index(op.f("idx_website_urls_website"), table_name="website_urls")
-    op.drop_table("website_urls")
     op.drop_index(op.f("idx_grantees_area"), table_name="grantees")
     op.drop_index(op.f("idx_grantees_website"), table_name="grantees")
     op.drop_table("grantees")
-    op.drop_index(op.f("idx_crawl_event_tags_event"), table_name="crawl_event_tags")
-    op.drop_index(op.f("idx_crawl_event_tags_tag"), table_name="crawl_event_tags")
-    op.drop_table("crawl_event_tags")
-    op.drop_table("website_instagram")
-    op.drop_index(op.f("idx_website_tags_website"), table_name="website_tags")
-    op.drop_table("website_tags")
     op.drop_index(op.f("idx_crawl_runs_run_date"), table_name="crawl_runs")
     op.drop_index(op.f("idx_crawl_runs_status"), table_name="crawl_runs")
     op.drop_table("crawl_runs")
+    op.drop_index(op.f("idx_edits_created"), table_name="edits")
+    op.drop_index(op.f("idx_edits_source"), table_name="edits")
+    op.drop_index(op.f("idx_edits_table_record"), table_name="edits")
+    op.drop_index(op.f("idx_edits_user"), table_name="edits")
+    op.drop_table("edits")
+    op.drop_table("location_instagram")
+    op.drop_table("website_instagram")
     op.drop_index(
         op.f("idx_crawl_event_occurrences_event"), table_name="crawl_event_occurrences"
     )
@@ -211,22 +199,36 @@ def upgrade() -> None:
         table_name="crawl_event_occurrences",
     )
     op.drop_table("crawl_event_occurrences")
-    op.drop_index(op.f("idx_edits_created"), table_name="edits")
-    op.drop_index(op.f("idx_edits_source"), table_name="edits")
-    op.drop_index(op.f("idx_edits_table_record"), table_name="edits")
-    op.drop_index(op.f("idx_edits_user"), table_name="edits")
-    op.drop_table("edits")
-    op.drop_table("instagram_accounts")
-    op.drop_table("sync_state")
+    op.drop_index(op.f("idx_conflicts_created"), table_name="conflicts")
+    op.drop_index(op.f("idx_conflicts_status"), table_name="conflicts")
+    op.drop_index(op.f("idx_conflicts_table_record"), table_name="conflicts")
+    op.drop_table("conflicts")
+    op.drop_index(op.f("idx_website_tags_website"), table_name="website_tags")
+    op.drop_table("website_tags")
     op.drop_index(op.f("idx_websites_disabled"), table_name="websites")
     op.drop_index(op.f("idx_websites_last_crawled"), table_name="websites")
     op.drop_index(op.f("idx_websites_name"), table_name="websites")
     op.drop_table("websites")
+    op.drop_table("instagram_accounts")
+    op.drop_index(op.f("idx_website_urls_website"), table_name="website_urls")
+    op.drop_table("website_urls")
     op.drop_index(
         op.f("idx_website_locations_location"), table_name="website_locations"
     )
     op.drop_index(op.f("idx_website_locations_website"), table_name="website_locations")
     op.drop_table("website_locations")
+    op.drop_index(op.f("idx_crawl_event_tags_event"), table_name="crawl_event_tags")
+    op.drop_index(op.f("idx_crawl_event_tags_tag"), table_name="crawl_event_tags")
+    op.drop_table("crawl_event_tags")
+    op.drop_index(op.f("idx_feedback_created_at"), table_name="feedback")
+    op.drop_table("feedback")
+    op.drop_table("sync_state")
+    op.drop_index(op.f("idx_crawl_events_content_hash"), table_name="crawl_events")
+    op.drop_index(op.f("idx_crawl_events_crawl_result"), table_name="crawl_events")
+    op.drop_index(op.f("idx_crawl_events_location_id"), table_name="crawl_events")
+    op.drop_index(op.f("idx_crawl_events_location_name"), table_name="crawl_events")
+    op.drop_index(op.f("idx_crawl_events_name"), table_name="crawl_events")
+    op.drop_table("crawl_events")
     op.add_column(
         "crawl_results", sa.Column("crawl_job_id", sa.Integer(), nullable=False)
     )
@@ -239,10 +241,10 @@ def upgrade() -> None:
     op.drop_index(op.f("idx_crawl_results_website"), table_name="crawl_results")
     op.create_unique_constraint(None, "crawl_results", ["crawl_job_id", "source_id"])
     op.drop_constraint(
-        op.f("crawl_results_website_id_fkey"), "crawl_results", type_="foreignkey"
+        op.f("crawl_results_crawl_run_id_fkey"), "crawl_results", type_="foreignkey"
     )
     op.drop_constraint(
-        op.f("crawl_results_crawl_run_id_fkey"), "crawl_results", type_="foreignkey"
+        op.f("crawl_results_website_id_fkey"), "crawl_results", type_="foreignkey"
     )
     op.create_foreign_key(
         None, "crawl_results", "sources", ["source_id"], ["id"], ondelete="CASCADE"
@@ -255,12 +257,12 @@ def upgrade() -> None:
         ["id"],
         ondelete="CASCADE",
     )
+    op.drop_column("crawl_results", "event_count")
     op.drop_column("crawl_results", "filename")
     op.drop_column("crawl_results", "crawl_run_id")
-    op.drop_column("crawl_results", "extracted_content")
-    op.drop_column("crawl_results", "website_id")
-    op.drop_column("crawl_results", "event_count")
     op.drop_column("crawl_results", "crawled_content")
+    op.drop_column("crawl_results", "website_id")
+    op.drop_column("crawl_results", "extracted_content")
     op.drop_index(
         op.f("idx_event_occurrences_date_range"), table_name="event_occurrences"
     )
@@ -323,6 +325,7 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    op.add_column("events", sa.Column("deleted_at", sa.TIMESTAMP(), nullable=True))
     op.alter_column("events", "location_id", existing_type=sa.INTEGER(), nullable=False)
     op.drop_index(op.f("idx_events_archived"), table_name="events")
     op.drop_index(op.f("idx_events_location"), table_name="events")
@@ -334,10 +337,10 @@ def upgrade() -> None:
     op.create_foreign_key(
         None, "events", "locations", ["location_id"], ["id"], ondelete="RESTRICT"
     )
-    op.drop_column("events", "archived")
+    op.drop_column("events", "suppressed")
     op.drop_column("events", "website_id")
     op.drop_column("events", "location_name")
-    op.drop_column("events", "suppressed")
+    op.drop_column("events", "archived")
     op.drop_index(
         op.f("idx_location_alt_names_location"), table_name="location_alternate_names"
     )
@@ -371,9 +374,11 @@ def upgrade() -> None:
             nullable=False,
         ),
     )
+    op.add_column("locations", sa.Column("deleted_at", sa.TIMESTAMP(), nullable=True))
     op.drop_index(op.f("idx_locations_coords"), table_name="locations")
     op.drop_index(op.f("idx_locations_name"), table_name="locations")
     op.drop_index(op.f("idx_locations_short_name"), table_name="locations")
+    op.add_column("tag_rules", sa.Column("deleted_at", sa.TIMESTAMP(), nullable=True))
     op.drop_index(op.f("idx_tag_rules_pattern"), table_name="tag_rules")
     op.drop_index(op.f("idx_tag_rules_rule_type"), table_name="tag_rules")
     op.drop_index(op.f("idx_tags_name"), table_name="tags")
@@ -392,6 +397,7 @@ def downgrade() -> None:
     op.create_index(
         op.f("idx_tag_rules_pattern"), "tag_rules", ["pattern"], unique=False
     )
+    op.drop_column("tag_rules", "deleted_at")
     op.create_index(
         op.f("idx_locations_short_name"), "locations", ["short_name"], unique=False
     )
@@ -399,6 +405,7 @@ def downgrade() -> None:
     op.create_index(
         op.f("idx_locations_coords"), "locations", ["lat", "lng"], unique=False
     )
+    op.drop_column("locations", "deleted_at")
     op.drop_column("locations", "type")
     op.drop_column("locations", "website_url")
     op.add_column(
@@ -453,7 +460,7 @@ def downgrade() -> None:
     op.add_column(
         "events",
         sa.Column(
-            "suppressed",
+            "archived",
             sa.BOOLEAN(),
             server_default=sa.text("false"),
             autoincrement=False,
@@ -473,14 +480,14 @@ def downgrade() -> None:
     op.add_column(
         "events",
         sa.Column(
-            "archived",
+            "suppressed",
             sa.BOOLEAN(),
             server_default=sa.text("false"),
             autoincrement=False,
             nullable=False,
         ),
     )
-    op.drop_constraint(None, "events", type_="foreignkey")  # type: ignore[arg-type]
+    op.drop_constraint(None, "events", type_="foreignkey")
     op.create_foreign_key(
         op.f("events_website_id_fkey"),
         "events",
@@ -505,6 +512,7 @@ def downgrade() -> None:
     )
     op.create_index(op.f("idx_events_archived"), "events", ["archived"], unique=False)
     op.alter_column("events", "location_id", existing_type=sa.INTEGER(), nullable=True)
+    op.drop_column("events", "deleted_at")
     op.drop_column("events", "status")
     op.add_column(
         "event_urls",
@@ -536,8 +544,8 @@ def downgrade() -> None:
         "event_sources",
         sa.Column("crawl_event_id", sa.INTEGER(), autoincrement=False, nullable=False),
     )
-    op.drop_constraint(None, "event_sources", type_="foreignkey")  # type: ignore[arg-type]
-    op.drop_constraint(None, "event_sources", type_="foreignkey")  # type: ignore[arg-type]
+    op.drop_constraint(None, "event_sources", type_="foreignkey")
+    op.drop_constraint(None, "event_sources", type_="foreignkey")
     op.create_foreign_key(
         op.f("event_sources_crawl_event_id_fkey"),
         "event_sources",
@@ -546,7 +554,7 @@ def downgrade() -> None:
         ["id"],
         ondelete="CASCADE",
     )
-    op.drop_constraint(None, "event_sources", type_="unique")  # type: ignore[arg-type]
+    op.drop_constraint(None, "event_sources", type_="unique")
     op.create_index(
         op.f("idx_event_sources_event"), "event_sources", ["event_id"], unique=False
     )
@@ -595,17 +603,7 @@ def downgrade() -> None:
     )
     op.add_column(
         "crawl_results",
-        sa.Column("crawled_content", sa.TEXT(), autoincrement=False, nullable=True),
-    )
-    op.add_column(
-        "crawl_results",
-        sa.Column(
-            "event_count",
-            sa.INTEGER(),
-            server_default=sa.text("0"),
-            autoincrement=False,
-            nullable=False,
-        ),
+        sa.Column("extracted_content", sa.TEXT(), autoincrement=False, nullable=True),
     )
     op.add_column(
         "crawl_results",
@@ -613,7 +611,7 @@ def downgrade() -> None:
     )
     op.add_column(
         "crawl_results",
-        sa.Column("extracted_content", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column("crawled_content", sa.TEXT(), autoincrement=False, nullable=True),
     )
     op.add_column(
         "crawl_results",
@@ -625,16 +623,18 @@ def downgrade() -> None:
             "filename", sa.VARCHAR(length=255), autoincrement=False, nullable=False
         ),
     )
-    op.drop_constraint(None, "crawl_results", type_="foreignkey")  # type: ignore[arg-type]
-    op.drop_constraint(None, "crawl_results", type_="foreignkey")  # type: ignore[arg-type]
-    op.create_foreign_key(
-        op.f("crawl_results_crawl_run_id_fkey"),
+    op.add_column(
         "crawl_results",
-        "crawl_runs",
-        ["crawl_run_id"],
-        ["id"],
-        ondelete="CASCADE",
+        sa.Column(
+            "event_count",
+            sa.INTEGER(),
+            server_default=sa.text("0"),
+            autoincrement=False,
+            nullable=False,
+        ),
     )
+    op.drop_constraint(None, "crawl_results", type_="foreignkey")
+    op.drop_constraint(None, "crawl_results", type_="foreignkey")
     op.create_foreign_key(
         op.f("crawl_results_website_id_fkey"),
         "crawl_results",
@@ -643,7 +643,15 @@ def downgrade() -> None:
         ["id"],
         ondelete="SET NULL",
     )
-    op.drop_constraint(None, "crawl_results", type_="unique")  # type: ignore[arg-type]
+    op.create_foreign_key(
+        op.f("crawl_results_crawl_run_id_fkey"),
+        "crawl_results",
+        "crawl_runs",
+        ["crawl_run_id"],
+        ["id"],
+        ondelete="CASCADE",
+    )
+    op.drop_constraint(None, "crawl_results", type_="unique")
     op.create_index(
         op.f("idx_crawl_results_website"), "crawl_results", ["website_id"], unique=False
     )
@@ -664,6 +672,142 @@ def downgrade() -> None:
     )
     op.drop_column("crawl_results", "source_id")
     op.drop_column("crawl_results", "crawl_job_id")
+    op.create_table(
+        "crawl_events",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("crawl_result_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("name", sa.VARCHAR(length=500), autoincrement=False, nullable=False),
+        sa.Column(
+            "short_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True
+        ),
+        sa.Column("description", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column("emoji", sa.VARCHAR(length=10), autoincrement=False, nullable=True),
+        sa.Column(
+            "location_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "sublocation", sa.VARCHAR(length=255), autoincrement=False, nullable=True
+        ),
+        sa.Column("location_id", sa.INTEGER(), autoincrement=False, nullable=True),
+        sa.Column("url", sa.VARCHAR(length=2000), autoincrement=False, nullable=True),
+        sa.Column(
+            "raw_data",
+            postgresql.JSONB(astext_type=sa.Text()),
+            autoincrement=False,
+            nullable=True,
+        ),
+        sa.Column(
+            "content_hash", sa.CHAR(length=64), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "created_at",
+            postgresql.TIMESTAMP(),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["crawl_result_id"],
+            ["crawl_results.id"],
+            name=op.f("crawl_events_crawl_result_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("crawl_events_pkey")),
+    )
+    op.create_index(
+        op.f("idx_crawl_events_name"), "crawl_events", ["name"], unique=False
+    )
+    op.create_index(
+        op.f("idx_crawl_events_location_name"),
+        "crawl_events",
+        ["location_name"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("idx_crawl_events_location_id"),
+        "crawl_events",
+        ["location_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("idx_crawl_events_crawl_result"),
+        "crawl_events",
+        ["crawl_result_id"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("idx_crawl_events_content_hash"),
+        "crawl_events",
+        ["content_hash"],
+        unique=False,
+    )
+    op.create_table(
+        "sync_state",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column(
+            "source",
+            postgresql.ENUM("local", "website", name="sync_source"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.Column(
+            "last_synced_edit_id", sa.INTEGER(), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "last_sync_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("sync_state_pkey")),
+        sa.UniqueConstraint(
+            "source",
+            name=op.f("sync_state_source_key"),
+            postgresql_include=[],
+            postgresql_nulls_not_distinct=False,
+        ),
+    )
+    op.create_table(
+        "feedback",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("message", sa.TEXT(), autoincrement=False, nullable=False),
+        sa.Column(
+            "user_agent", sa.VARCHAR(length=500), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "page_url", sa.VARCHAR(length=500), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "created_at",
+            postgresql.TIMESTAMP(),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("feedback_pkey")),
+    )
+    op.create_index(
+        op.f("idx_feedback_created_at"), "feedback", ["created_at"], unique=False
+    )
+    op.create_table(
+        "crawl_event_tags",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("crawl_event_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("tag", sa.VARCHAR(length=100), autoincrement=False, nullable=False),
+        sa.ForeignKeyConstraint(
+            ["crawl_event_id"],
+            ["crawl_events.id"],
+            name=op.f("crawl_event_tags_crawl_event_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("crawl_event_tags_pkey")),
+    )
+    op.create_index(
+        op.f("idx_crawl_event_tags_tag"), "crawl_event_tags", ["tag"], unique=False
+    )
+    op.create_index(
+        op.f("idx_crawl_event_tags_event"),
+        "crawl_event_tags",
+        ["crawl_event_id"],
+        unique=False,
+    )
     op.create_table(
         "website_locations",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
@@ -701,6 +845,62 @@ def downgrade() -> None:
         "website_locations",
         ["location_id"],
         unique=False,
+    )
+    op.create_table(
+        "website_urls",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("url", sa.VARCHAR(length=2000), autoincrement=False, nullable=False),
+        sa.Column("js_code", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column(
+            "sort_order",
+            sa.INTEGER(),
+            server_default=sa.text("0"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["website_id"],
+            ["websites.id"],
+            name=op.f("website_urls_website_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("website_urls_pkey")),
+    )
+    op.create_index(
+        op.f("idx_website_urls_website"), "website_urls", ["website_id"], unique=False
+    )
+    op.create_table(
+        "instagram_accounts",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column(
+            "handle", sa.VARCHAR(length=100), autoincrement=False, nullable=False
+        ),
+        sa.Column("name", sa.VARCHAR(length=255), autoincrement=False, nullable=True),
+        sa.Column(
+            "description", sa.VARCHAR(length=500), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "created_at",
+            postgresql.TIMESTAMP(),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            postgresql.TIMESTAMP(),
+            server_default=sa.text("CURRENT_TIMESTAMP"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("instagram_accounts_pkey")),
+        sa.UniqueConstraint(
+            "handle",
+            name=op.f("instagram_accounts_handle_key"),
+            postgresql_include=[],
+            postgresql_nulls_not_distinct=False,
+        ),
     )
     op.create_table(
         "websites",
@@ -827,37 +1027,65 @@ def downgrade() -> None:
         op.f("idx_websites_disabled"), "websites", ["disabled"], unique=False
     )
     op.create_table(
-        "sync_state",
+        "website_tags",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column(
-            "source",
-            postgresql.ENUM("local", "website", name="sync_source"),
-            autoincrement=False,
-            nullable=False,
+        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("tag_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.ForeignKeyConstraint(
+            ["tag_id"],
+            ["tags.id"],
+            name=op.f("website_tags_tag_id_fkey"),
+            ondelete="CASCADE",
         ),
-        sa.Column(
-            "last_synced_edit_id", sa.INTEGER(), autoincrement=False, nullable=True
+        sa.ForeignKeyConstraint(
+            ["website_id"],
+            ["websites.id"],
+            name=op.f("website_tags_website_id_fkey"),
+            ondelete="CASCADE",
         ),
-        sa.Column(
-            "last_sync_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("sync_state_pkey")),
+        sa.PrimaryKeyConstraint("id", name=op.f("website_tags_pkey")),
         sa.UniqueConstraint(
-            "source",
-            name=op.f("sync_state_source_key"),
+            "website_id",
+            "tag_id",
+            name=op.f("website_tags_website_id_tag_id_key"),
             postgresql_include=[],
             postgresql_nulls_not_distinct=False,
         ),
     )
+    op.create_index(
+        op.f("idx_website_tags_website"), "website_tags", ["website_id"], unique=False
+    )
     op.create_table(
-        "instagram_accounts",
+        "conflicts",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("local_edit_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("website_edit_id", sa.INTEGER(), autoincrement=False, nullable=False),
         sa.Column(
-            "handle", sa.VARCHAR(length=100), autoincrement=False, nullable=False
+            "table_name", sa.VARCHAR(length=50), autoincrement=False, nullable=False
         ),
-        sa.Column("name", sa.VARCHAR(length=255), autoincrement=False, nullable=True),
+        sa.Column("record_id", sa.INTEGER(), autoincrement=False, nullable=False),
         sa.Column(
-            "description", sa.VARCHAR(length=500), autoincrement=False, nullable=True
+            "field_name", sa.VARCHAR(length=100), autoincrement=False, nullable=True
+        ),
+        sa.Column("local_value", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column("website_value", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column(
+            "status",
+            postgresql.ENUM(
+                "pending",
+                "resolved_local",
+                "resolved_website",
+                "resolved_merged",
+                name="conflict_status",
+            ),
+            server_default=sa.text("'pending'::conflict_status"),
+            autoincrement=False,
+            nullable=False,
+        ),
+        sa.Column("resolved_value", sa.TEXT(), autoincrement=False, nullable=True),
+        sa.Column("resolved_by", sa.INTEGER(), autoincrement=False, nullable=True),
+        sa.Column(
+            "resolved_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
         ),
         sa.Column(
             "created_at",
@@ -866,19 +1094,113 @@ def downgrade() -> None:
             autoincrement=False,
             nullable=False,
         ),
+        sa.ForeignKeyConstraint(
+            ["local_edit_id"],
+            ["edits.id"],
+            name=op.f("conflicts_local_edit_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["resolved_by"],
+            ["users.id"],
+            name=op.f("conflicts_resolved_by_fkey"),
+            ondelete="SET NULL",
+        ),
+        sa.ForeignKeyConstraint(
+            ["website_edit_id"],
+            ["edits.id"],
+            name=op.f("conflicts_website_edit_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("conflicts_pkey")),
+    )
+    op.create_index(
+        op.f("idx_conflicts_table_record"),
+        "conflicts",
+        ["table_name", "record_id"],
+        unique=False,
+    )
+    op.create_index(op.f("idx_conflicts_status"), "conflicts", ["status"], unique=False)
+    op.create_index(
+        op.f("idx_conflicts_created"), "conflicts", ["created_at"], unique=False
+    )
+    op.create_table(
+        "crawl_event_occurrences",
+        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
+        sa.Column("crawl_event_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("start_date", sa.DATE(), autoincrement=False, nullable=False),
         sa.Column(
-            "updated_at",
-            postgresql.TIMESTAMP(),
-            server_default=sa.text("CURRENT_TIMESTAMP"),
+            "start_time", sa.VARCHAR(length=20), autoincrement=False, nullable=True
+        ),
+        sa.Column("end_date", sa.DATE(), autoincrement=False, nullable=True),
+        sa.Column(
+            "end_time", sa.VARCHAR(length=20), autoincrement=False, nullable=True
+        ),
+        sa.Column(
+            "sort_order",
+            sa.INTEGER(),
+            server_default=sa.text("0"),
             autoincrement=False,
             nullable=False,
         ),
-        sa.PrimaryKeyConstraint("id", name=op.f("instagram_accounts_pkey")),
-        sa.UniqueConstraint(
-            "handle",
-            name=op.f("instagram_accounts_handle_key"),
-            postgresql_include=[],
-            postgresql_nulls_not_distinct=False,
+        sa.ForeignKeyConstraint(
+            ["crawl_event_id"],
+            ["crawl_events.id"],
+            name=op.f("crawl_event_occurrences_crawl_event_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint("id", name=op.f("crawl_event_occurrences_pkey")),
+    )
+    op.create_index(
+        op.f("idx_crawl_event_occurrences_start_date"),
+        "crawl_event_occurrences",
+        ["start_date"],
+        unique=False,
+    )
+    op.create_index(
+        op.f("idx_crawl_event_occurrences_event"),
+        "crawl_event_occurrences",
+        ["crawl_event_id"],
+        unique=False,
+    )
+    op.create_table(
+        "website_instagram",
+        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("instagram_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.ForeignKeyConstraint(
+            ["instagram_id"],
+            ["instagram_accounts.id"],
+            name=op.f("website_instagram_instagram_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["website_id"],
+            ["websites.id"],
+            name=op.f("website_instagram_website_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint(
+            "website_id", "instagram_id", name=op.f("website_instagram_pkey")
+        ),
+    )
+    op.create_table(
+        "location_instagram",
+        sa.Column("location_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.Column("instagram_id", sa.INTEGER(), autoincrement=False, nullable=False),
+        sa.ForeignKeyConstraint(
+            ["instagram_id"],
+            ["instagram_accounts.id"],
+            name=op.f("location_instagram_instagram_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["location_id"],
+            ["locations.id"],
+            name=op.f("location_instagram_location_id_fkey"),
+            ondelete="CASCADE",
+        ),
+        sa.PrimaryKeyConstraint(
+            "location_id", "instagram_id", name=op.f("location_instagram_pkey")
         ),
     )
     op.create_table(
@@ -953,45 +1275,6 @@ def downgrade() -> None:
     op.create_index(op.f("idx_edits_source"), "edits", ["source"], unique=False)
     op.create_index(op.f("idx_edits_created"), "edits", ["created_at"], unique=False)
     op.create_table(
-        "crawl_event_occurrences",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("crawl_event_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("start_date", sa.DATE(), autoincrement=False, nullable=False),
-        sa.Column(
-            "start_time", sa.VARCHAR(length=20), autoincrement=False, nullable=True
-        ),
-        sa.Column("end_date", sa.DATE(), autoincrement=False, nullable=True),
-        sa.Column(
-            "end_time", sa.VARCHAR(length=20), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "sort_order",
-            sa.INTEGER(),
-            server_default=sa.text("0"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["crawl_event_id"],
-            ["crawl_events.id"],
-            name=op.f("crawl_event_occurrences_crawl_event_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("crawl_event_occurrences_pkey")),
-    )
-    op.create_index(
-        op.f("idx_crawl_event_occurrences_start_date"),
-        "crawl_event_occurrences",
-        ["start_date"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("idx_crawl_event_occurrences_event"),
-        "crawl_event_occurrences",
-        ["crawl_event_id"],
-        unique=False,
-    )
-    op.create_table(
         "crawl_runs",
         sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
         sa.Column("run_date", sa.DATE(), autoincrement=False, nullable=False),
@@ -1026,77 +1309,6 @@ def downgrade() -> None:
     )
     op.create_index(
         op.f("idx_crawl_runs_run_date"), "crawl_runs", ["run_date"], unique=False
-    )
-    op.create_table(
-        "website_tags",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("tag_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(
-            ["tag_id"],
-            ["tags.id"],
-            name=op.f("website_tags_tag_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["website_id"],
-            ["websites.id"],
-            name=op.f("website_tags_website_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("website_tags_pkey")),
-        sa.UniqueConstraint(
-            "website_id",
-            "tag_id",
-            name=op.f("website_tags_website_id_tag_id_key"),
-            postgresql_include=[],
-            postgresql_nulls_not_distinct=False,
-        ),
-    )
-    op.create_index(
-        op.f("idx_website_tags_website"), "website_tags", ["website_id"], unique=False
-    )
-    op.create_table(
-        "website_instagram",
-        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("instagram_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(
-            ["instagram_id"],
-            ["instagram_accounts.id"],
-            name=op.f("website_instagram_instagram_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["website_id"],
-            ["websites.id"],
-            name=op.f("website_instagram_website_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint(
-            "website_id", "instagram_id", name=op.f("website_instagram_pkey")
-        ),
-    )
-    op.create_table(
-        "crawl_event_tags",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("crawl_event_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("tag", sa.VARCHAR(length=100), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(
-            ["crawl_event_id"],
-            ["crawl_events.id"],
-            name=op.f("crawl_event_tags_crawl_event_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("crawl_event_tags_pkey")),
-    )
-    op.create_index(
-        op.f("idx_crawl_event_tags_tag"), "crawl_event_tags", ["tag"], unique=False
-    )
-    op.create_index(
-        op.f("idx_crawl_event_tags_event"),
-        "crawl_event_tags",
-        ["crawl_event_id"],
-        unique=False,
     )
     op.create_table(
         "grantees",
@@ -1143,210 +1355,6 @@ def downgrade() -> None:
         op.f("idx_grantees_website"), "grantees", ["website_id"], unique=False
     )
     op.create_index(op.f("idx_grantees_area"), "grantees", ["area"], unique=False)
-    op.create_table(
-        "website_urls",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("website_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("url", sa.VARCHAR(length=2000), autoincrement=False, nullable=False),
-        sa.Column("js_code", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column(
-            "sort_order",
-            sa.INTEGER(),
-            server_default=sa.text("0"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["website_id"],
-            ["websites.id"],
-            name=op.f("website_urls_website_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("website_urls_pkey")),
-    )
-    op.create_index(
-        op.f("idx_website_urls_website"), "website_urls", ["website_id"], unique=False
-    )
-    op.create_table(
-        "location_instagram",
-        sa.Column("location_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("instagram_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.ForeignKeyConstraint(
-            ["instagram_id"],
-            ["instagram_accounts.id"],
-            name=op.f("location_instagram_instagram_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["location_id"],
-            ["locations.id"],
-            name=op.f("location_instagram_location_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint(
-            "location_id", "instagram_id", name=op.f("location_instagram_pkey")
-        ),
-    )
-    op.create_table(
-        "feedback",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("message", sa.TEXT(), autoincrement=False, nullable=False),
-        sa.Column(
-            "user_agent", sa.VARCHAR(length=500), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "page_url", sa.VARCHAR(length=500), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "created_at",
-            postgresql.TIMESTAMP(),
-            server_default=sa.text("CURRENT_TIMESTAMP"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("feedback_pkey")),
-    )
-    op.create_index(
-        op.f("idx_feedback_created_at"), "feedback", ["created_at"], unique=False
-    )
-    op.create_table(
-        "conflicts",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("local_edit_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("website_edit_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column(
-            "table_name", sa.VARCHAR(length=50), autoincrement=False, nullable=False
-        ),
-        sa.Column("record_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column(
-            "field_name", sa.VARCHAR(length=100), autoincrement=False, nullable=True
-        ),
-        sa.Column("local_value", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("website_value", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column(
-            "status",
-            postgresql.ENUM(
-                "pending",
-                "resolved_local",
-                "resolved_website",
-                "resolved_merged",
-                name="conflict_status",
-            ),
-            server_default=sa.text("'pending'::conflict_status"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.Column("resolved_value", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("resolved_by", sa.INTEGER(), autoincrement=False, nullable=True),
-        sa.Column(
-            "resolved_at", postgresql.TIMESTAMP(), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "created_at",
-            postgresql.TIMESTAMP(),
-            server_default=sa.text("CURRENT_TIMESTAMP"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["local_edit_id"],
-            ["edits.id"],
-            name=op.f("conflicts_local_edit_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.ForeignKeyConstraint(
-            ["resolved_by"],
-            ["users.id"],
-            name=op.f("conflicts_resolved_by_fkey"),
-            ondelete="SET NULL",
-        ),
-        sa.ForeignKeyConstraint(
-            ["website_edit_id"],
-            ["edits.id"],
-            name=op.f("conflicts_website_edit_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("conflicts_pkey")),
-    )
-    op.create_index(
-        op.f("idx_conflicts_table_record"),
-        "conflicts",
-        ["table_name", "record_id"],
-        unique=False,
-    )
-    op.create_index(op.f("idx_conflicts_status"), "conflicts", ["status"], unique=False)
-    op.create_index(
-        op.f("idx_conflicts_created"), "conflicts", ["created_at"], unique=False
-    )
-    op.create_table(
-        "crawl_events",
-        sa.Column("id", sa.INTEGER(), autoincrement=True, nullable=False),
-        sa.Column("crawl_result_id", sa.INTEGER(), autoincrement=False, nullable=False),
-        sa.Column("name", sa.VARCHAR(length=500), autoincrement=False, nullable=False),
-        sa.Column(
-            "short_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True
-        ),
-        sa.Column("description", sa.TEXT(), autoincrement=False, nullable=True),
-        sa.Column("emoji", sa.VARCHAR(length=10), autoincrement=False, nullable=True),
-        sa.Column(
-            "location_name", sa.VARCHAR(length=255), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "sublocation", sa.VARCHAR(length=255), autoincrement=False, nullable=True
-        ),
-        sa.Column("location_id", sa.INTEGER(), autoincrement=False, nullable=True),
-        sa.Column("url", sa.VARCHAR(length=2000), autoincrement=False, nullable=True),
-        sa.Column(
-            "raw_data",
-            postgresql.JSONB(astext_type=sa.Text()),
-            autoincrement=False,
-            nullable=True,
-        ),
-        sa.Column(
-            "content_hash", sa.CHAR(length=64), autoincrement=False, nullable=True
-        ),
-        sa.Column(
-            "created_at",
-            postgresql.TIMESTAMP(),
-            server_default=sa.text("CURRENT_TIMESTAMP"),
-            autoincrement=False,
-            nullable=False,
-        ),
-        sa.ForeignKeyConstraint(
-            ["crawl_result_id"],
-            ["crawl_results.id"],
-            name=op.f("crawl_events_crawl_result_id_fkey"),
-            ondelete="CASCADE",
-        ),
-        sa.PrimaryKeyConstraint("id", name=op.f("crawl_events_pkey")),
-    )
-    op.create_index(
-        op.f("idx_crawl_events_name"), "crawl_events", ["name"], unique=False
-    )
-    op.create_index(
-        op.f("idx_crawl_events_location_name"),
-        "crawl_events",
-        ["location_name"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("idx_crawl_events_location_id"),
-        "crawl_events",
-        ["location_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("idx_crawl_events_crawl_result"),
-        "crawl_events",
-        ["crawl_result_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("idx_crawl_events_content_hash"),
-        "crawl_events",
-        ["content_hash"],
-        unique=False,
-    )
     op.drop_table("extracted_events")
     op.drop_table("crawl_contents")
     op.drop_table("source_urls")

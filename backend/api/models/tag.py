@@ -4,7 +4,7 @@ from sqlalchemy import Enum, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
-from api.models.base import CreatedAtMixin, TagRuleType
+from api.models.base import CreatedAtMixin, SoftDeleteMixin, TagRuleType
 
 
 class Tag(Base):
@@ -14,7 +14,7 @@ class Tag(Base):
     name: Mapped[str] = mapped_column(String(100), unique=True)
 
 
-class TagRule(CreatedAtMixin, Base):
+class TagRule(SoftDeleteMixin, CreatedAtMixin, Base):
     __tablename__ = "tag_rules"
     __table_args__ = (UniqueConstraint("rule_type", "pattern"),)
 
