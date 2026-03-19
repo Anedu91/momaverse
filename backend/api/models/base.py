@@ -1,8 +1,9 @@
 import enum
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import TIMESTAMP, func
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql.elements import ColumnElement
 
 # ============================================================================
 # PostgreSQL Enum Types (all pre-existing, create_type=False when used)
@@ -83,3 +84,29 @@ class CreatedAtMixin:
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP, server_default=func.current_timestamp()
     )
+
+
+class SoftDeleteMixin:
+    """Adds soft-delete capability via deleted_at timestamp.
+
+    A record is considered deleted when deleted_at IS NOT NULL.
+    Use .active() to filter queries to non-deleted records.
+    """
+
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, nullable=True, default=None
+    )
+
+    @classmethod
+    def active(cls) -> ColumnElement[bool]:
+        """Filter clause for non-deleted records.
+
+        Usage: select(Model).where(Model.active())
+        """
+        return cls.deleted_at.is_(None)
+
+    def soft_delete(self) -> None:
+        self.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+
+    def restore(self) -> None:
+        self.deleted_at = None

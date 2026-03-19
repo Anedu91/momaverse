@@ -13,6 +13,7 @@ from api.models.instagram import InstagramAccount  # noqa: F401
 from api.models.tag import Tag  # noqa: F401
 from api.models.user import User  # noqa: F401
 from api.models.website import Website  # noqa: F401
+from tests.models.test_models import SoftDeleteItem  # noqa: F401
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,

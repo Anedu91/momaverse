@@ -5,6 +5,7 @@ from api.models.base import (
     CrawlRunStatus,
     EditAction,
     EditSource,
+    SoftDeleteMixin,
     SourceType,
     SyncSourceEnum,
     TagRuleType,
@@ -48,6 +49,8 @@ __all__ = [
     "SourceType",
     "SyncSourceEnum",
     "TagRuleType",
+    # Mixins
+    "SoftDeleteMixin",
     # Models
     "Conflict",
     "CrawlEvent",
