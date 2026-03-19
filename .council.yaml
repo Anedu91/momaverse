@@ -1,0 +1,11 @@
+providers:
+  - name: openrouter
+    default_model: openai/gpt-5.4
+
+defaults:
+  providers:
+    - openrouter
+  timeout: 180
+  max_retries: 3
+  summary_tier: actions
+  output_format: rich
