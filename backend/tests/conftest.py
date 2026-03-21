@@ -5,14 +5,12 @@ from collections.abc import AsyncGenerator
 import pytest
 import pytest_asyncio
 from api.database import Base
-from api.models.crawl import CrawlResult  # noqa: F401
-from api.models.edit import Edit  # noqa: F401
+from api.models.crawl import CrawlContent, CrawlJob, CrawlResult, ExtractedEvent  # noqa: F401
 from api.models.event import Event, EventOccurrence, EventSource, EventTag, EventUrl  # noqa: F401
-from api.models.feedback import Feedback  # noqa: F401
-from api.models.instagram import InstagramAccount  # noqa: F401
-from api.models.tag import Tag  # noqa: F401
+from api.models.location import Location, LocationAlternateName, LocationTag  # noqa: F401
+from api.models.source import CrawlConfig, Source, SourceUrl  # noqa: F401
+from api.models.tag import Tag, TagRule  # noqa: F401
 from api.models.user import User  # noqa: F401
-from api.models.website import Website  # noqa: F401
 from tests.models.test_models import SoftDeleteItem  # noqa: F401
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,

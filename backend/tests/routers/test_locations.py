@@ -67,7 +67,7 @@ async def sample_location(db_session: AsyncSession) -> Location:
         description="A famous museum.",
         lat=40.7614,
         lng=-73.9776,
-        emoji="🏛️",
+        emoji="x",
     )
     db_session.add(location)
     await db_session.flush()
@@ -200,7 +200,6 @@ class TestGetLocationDetail:
         assert body["alternate_names"][0]["alternate_name"] == "MoMA NYC"
         assert len(body["tags"]) == 1
         assert body["tags"][0]["name"] == "art"
-        assert "websites" in body
 
     @pytest.mark.asyncio
     async def test_get_location_not_found(self, client: AsyncClient) -> None:
@@ -209,41 +208,6 @@ class TestGetLocationDetail:
 
         # Assert
         assert resp.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Get location history
-# ---------------------------------------------------------------------------
-
-
-class TestGetLocationHistory:
-    @pytest.mark.asyncio
-    async def test_get_history_requires_auth(
-        self, client: AsyncClient, sample_location: Location
-    ) -> None:
-        # Act — no auth header
-        resp = await client.get(f"/api/v1/locations/{sample_location.id}/history")
-
-        # Assert
-        assert resp.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_get_history_returns_edits(
-        self,
-        client: AsyncClient,
-        sample_location: Location,
-        auth_headers: dict[str, str],
-    ) -> None:
-        # Act
-        resp = await client.get(
-            f"/api/v1/locations/{sample_location.id}/history",
-            headers=auth_headers,
-        )
-
-        # Assert
-        assert resp.status_code == 200
-        body = resp.json()
-        assert isinstance(body, list)
 
 
 # ---------------------------------------------------------------------------
@@ -306,6 +270,28 @@ class TestCreateLocation:
         tag_names = [t["name"] for t in body["tags"]]
         assert "music" in tag_names
         assert "nightlife" in tag_names
+
+    @pytest.mark.asyncio
+    async def test_create_location_persists_website_url_and_type(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        # Arrange
+        payload = {
+            "name": "Typed Venue",
+            "website_url": "https://example.com",
+            "type": "area",
+        }
+
+        # Act
+        resp = await client.post(
+            "/api/v1/locations/", json=payload, headers=auth_headers
+        )
+
+        # Assert
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["website_url"] == "https://example.com"
+        assert body["type"] == "area"
 
     @pytest.mark.asyncio
     async def test_create_location_requires_auth(self, client: AsyncClient) -> None:
@@ -434,21 +420,20 @@ class TestDeleteLocation:
         assert get_resp.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_delete_location_with_events_returns_409(
+    async def test_delete_location_with_events_succeeds(
         self,
         client: AsyncClient,
         sample_location_with_event: Location,
         auth_headers: dict[str, str],
     ) -> None:
-        # Act
+        # Act — soft delete allows deleting locations with associated events
         resp = await client.delete(
             f"/api/v1/locations/{sample_location_with_event.id}",
             headers=auth_headers,
         )
 
         # Assert
-        assert resp.status_code == 409
-        assert "associated events" in resp.json()["detail"]
+        assert resp.status_code == 204
 
     @pytest.mark.asyncio
     async def test_delete_location_not_found(
@@ -472,3 +457,126 @@ class TestDeleteLocation:
 
         # Assert
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete behavior
+# ---------------------------------------------------------------------------
+
+
+class TestSoftDeleteLocation:
+    @pytest.mark.asyncio
+    async def test_delete_location_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Act
+        resp = await client.delete(
+            f"/api/v1/locations/{sample_location.id}", headers=auth_headers
+        )
+        assert resp.status_code == 204
+
+        # Assert — record still exists with deleted_at set
+        await db_session.refresh(sample_location)
+        assert sample_location.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_locations_excludes_deleted_by_default(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange
+        loc1 = Location(name="Active Location")
+        loc2 = Location(name="Deleted Location")
+        db_session.add_all([loc1, loc2])
+        await db_session.flush()
+
+        resp = await client.delete(f"/api/v1/locations/{loc2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get("/api/v1/locations/")
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Location" in names
+        assert "Deleted Location" not in names
+
+    @pytest.mark.asyncio
+    async def test_list_locations_includes_deleted_when_requested(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange
+        loc1 = Location(name="Active Location 2")
+        loc2 = Location(name="Deleted Location 2")
+        db_session.add_all([loc1, loc2])
+        await db_session.flush()
+
+        resp = await client.delete(f"/api/v1/locations/{loc2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get("/api/v1/locations/", params={"include_deleted": True})
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Location 2" in names
+        assert "Deleted Location 2" in names
+
+    @pytest.mark.asyncio
+    async def test_get_deleted_location_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_location: Location,
+    ) -> None:
+        # Arrange
+        resp = await client.delete(
+            f"/api/v1/locations/{sample_location.id}", headers=auth_headers
+        )
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"/api/v1/locations/{sample_location.id}")
+
+        # Assert
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_event_count_excludes_soft_deleted_events(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange — location with 2 events, soft-delete one
+        loc = Location(name="Event Count Location")
+        db_session.add(loc)
+        await db_session.flush()
+
+        e1 = Event(name="Active Event", location_id=loc.id)
+        e2 = Event(name="Deleted Event", location_id=loc.id)
+        db_session.add_all([e1, e2])
+        await db_session.flush()
+
+        e2.soft_delete()
+        await db_session.flush()
+
+        # Act
+        resp = await client.get("/api/v1/locations/")
+        body = resp.json()
+
+        # Assert — only 1 active event counted
+        loc_data = next(
+            item for item in body["data"] if item["name"] == "Event Count Location"
+        )
+        assert loc_data["event_count"] == 1

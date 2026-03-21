@@ -11,7 +11,6 @@ from api.models.event import Event, EventOccurrence, EventTag, EventUrl
 from api.models.location import Location
 from api.models.tag import Tag
 from api.models.user import User
-from api.models.website import Website
 from api.routers.events import router
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -72,25 +71,23 @@ async def sample_location(db_session: AsyncSession) -> Location:
 
 
 @pytest_asyncio.fixture
-async def sample_website(db_session: AsyncSession) -> Website:
-    ws = Website(name="Test Website")
-    db_session.add(ws)
-    await db_session.flush()
-    return ws
-
-
-@pytest_asyncio.fixture
-async def sample_event(db_session: AsyncSession) -> Event:
-    event = Event(name="Sample Event", description="A test event")
+async def sample_event(db_session: AsyncSession, sample_location: Location) -> Event:
+    event = Event(
+        name="Sample Event",
+        description="A test event",
+        location_id=sample_location.id,
+    )
     db_session.add(event)
     await db_session.flush()
     return event
 
 
 @pytest_asyncio.fixture
-async def sample_event_with_occurrence(db_session: AsyncSession) -> Event:
+async def sample_event_with_occurrence(
+    db_session: AsyncSession, sample_location: Location
+) -> Event:
     """An event with a future occurrence (for upcoming filter tests)."""
-    event = Event(name="Upcoming Event")
+    event = Event(name="Upcoming Event", location_id=sample_location.id)
     db_session.add(event)
     await db_session.flush()
 
@@ -98,7 +95,6 @@ async def sample_event_with_occurrence(db_session: AsyncSession) -> Event:
     occ = EventOccurrence(
         event_id=event.id,
         start_date=future_date,
-        sort_order=0,
     )
     db_session.add(occ)
     await db_session.flush()
@@ -160,13 +156,16 @@ class TestListEvents:
         db_session: AsyncSession,
         sample_location: Location,
     ) -> None:
-        # Arrange — event linked to the location
+        # Arrange — event linked to the sample location
         event = Event(name="Located Event", location_id=sample_location.id)
         db_session.add(event)
         await db_session.flush()
 
-        # Also create an unlinked event
-        other = Event(name="Other Event")
+        # Also create an event at a different location
+        other_loc = Location(name="Other Venue", short_name="OV")
+        db_session.add(other_loc)
+        await db_session.flush()
+        other = Event(name="Other Event", location_id=other_loc.id)
         db_session.add(other)
         await db_session.flush()
 
@@ -183,11 +182,16 @@ class TestListEvents:
 
     @pytest.mark.asyncio
     async def test_list_events_pagination(
-        self, client: AsyncClient, db_session: AsyncSession
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sample_location: Location,
     ) -> None:
         # Arrange — create 3 events
         for i in range(3):
-            db_session.add(Event(name=f"Page Event {i}"))
+            db_session.add(
+                Event(name=f"Page Event {i}", location_id=sample_location.id)
+            )
         await db_session.flush()
 
         # Act — page with limit=2, offset=0
@@ -213,10 +217,13 @@ class TestListEvents:
 class TestGetEvent:
     @pytest.mark.asyncio
     async def test_get_event_returns_detail(
-        self, client: AsyncClient, db_session: AsyncSession
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        sample_location: Location,
     ) -> None:
         # Arrange — event with occurrence, url, and tag
-        event = Event(name="Detail Event")
+        event = Event(name="Detail Event", location_id=sample_location.id)
         db_session.add(event)
         await db_session.flush()
 
@@ -224,12 +231,9 @@ class TestGetEvent:
             EventOccurrence(
                 event_id=event.id,
                 start_date=date(2025, 7, 1),
-                sort_order=0,
             )
         )
-        db_session.add(
-            EventUrl(event_id=event.id, url="https://example.com", sort_order=0)
-        )
+        db_session.add(EventUrl(event_id=event.id, url="https://example.com"))
 
         tag = Tag(name="music")
         db_session.add(tag)
@@ -261,40 +265,6 @@ class TestGetEvent:
 
 
 # ---------------------------------------------------------------------------
-# Get event history
-# ---------------------------------------------------------------------------
-
-
-class TestGetEventHistory:
-    @pytest.mark.asyncio
-    async def test_get_history_requires_auth(
-        self, client: AsyncClient, sample_event: Event
-    ) -> None:
-        # Act — no auth header
-        resp = await client.get(f"{PREFIX}/{sample_event.id}/history")
-
-        # Assert
-        assert resp.status_code == 401
-
-    @pytest.mark.asyncio
-    async def test_get_history_returns_edits(
-        self,
-        client: AsyncClient,
-        sample_event: Event,
-        auth_headers: dict[str, str],
-    ) -> None:
-        # Act
-        resp = await client.get(
-            f"{PREFIX}/{sample_event.id}/history", headers=auth_headers
-        )
-
-        # Assert — even if empty, should be a list
-        assert resp.status_code == 200
-        body = resp.json()
-        assert isinstance(body, list)
-
-
-# ---------------------------------------------------------------------------
 # Create event
 # ---------------------------------------------------------------------------
 
@@ -302,10 +272,13 @@ class TestGetEventHistory:
 class TestCreateEvent:
     @pytest.mark.asyncio
     async def test_create_event_success(
-        self, client: AsyncClient, auth_headers: dict[str, str]
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_location: Location,
     ) -> None:
         # Arrange
-        payload = {"name": "New Event"}
+        payload = {"name": "New Event", "location_id": sample_location.id}
 
         # Act
         resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
@@ -318,11 +291,15 @@ class TestCreateEvent:
 
     @pytest.mark.asyncio
     async def test_create_event_with_occurrences_and_urls(
-        self, client: AsyncClient, auth_headers: dict[str, str]
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_location: Location,
     ) -> None:
         # Arrange
         payload = {
             "name": "Full Event",
+            "location_id": sample_location.id,
             "occurrences": [
                 {"start_date": "2025-08-01", "start_time": "18:00"},
                 {"start_date": "2025-08-02"},
@@ -362,7 +339,9 @@ class TestCreateEvent:
     @pytest.mark.asyncio
     async def test_create_event_requires_auth(self, client: AsyncClient) -> None:
         # Act — no auth header
-        resp = await client.post(f"{PREFIX}/", json={"name": "No Auth"})
+        resp = await client.post(
+            f"{PREFIX}/", json={"name": "No Auth", "location_id": 1}
+        )
 
         # Assert
         assert resp.status_code == 401
@@ -384,98 +363,6 @@ class TestCreateEvent:
         assert resp.status_code == 201
         body = resp.json()
         assert body["location_id"] == sample_location.id
-
-
-# ---------------------------------------------------------------------------
-# Update event
-# ---------------------------------------------------------------------------
-
-
-class TestUpdateEvent:
-    @pytest.mark.asyncio
-    async def test_update_event_partial(
-        self,
-        client: AsyncClient,
-        auth_headers: dict[str, str],
-        sample_event: Event,
-    ) -> None:
-        # Act — only update name
-        resp = await client.put(
-            f"{PREFIX}/{sample_event.id}",
-            json={"name": "Updated Name"},
-            headers=auth_headers,
-        )
-
-        # Assert
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["name"] == "Updated Name"
-        # Description should remain unchanged
-        assert body["description"] == "A test event"
-
-    @pytest.mark.asyncio
-    async def test_update_event_replaces_occurrences(
-        self,
-        client: AsyncClient,
-        auth_headers: dict[str, str],
-        db_session: AsyncSession,
-    ) -> None:
-        # Arrange — event with an existing occurrence
-        event = Event(name="Occ Event")
-        db_session.add(event)
-        await db_session.flush()
-
-        db_session.add(
-            EventOccurrence(
-                event_id=event.id,
-                start_date=date(2025, 1, 1),
-                sort_order=0,
-            )
-        )
-        await db_session.flush()
-
-        # Act — replace occurrences with a new set
-        resp = await client.put(
-            f"{PREFIX}/{event.id}",
-            json={
-                "occurrences": [
-                    {"start_date": "2025-09-01"},
-                    {"start_date": "2025-09-02"},
-                ]
-            },
-            headers=auth_headers,
-        )
-
-        # Assert
-        assert resp.status_code == 200
-        body = resp.json()
-        assert len(body["occurrences"]) == 2
-        occ_dates = sorted(o["start_date"] for o in body["occurrences"])
-        assert occ_dates == ["2025-09-01", "2025-09-02"]
-
-    @pytest.mark.asyncio
-    async def test_update_event_not_found(
-        self, client: AsyncClient, auth_headers: dict[str, str]
-    ) -> None:
-        # Act
-        resp = await client.put(
-            f"{PREFIX}/99999",
-            json={"name": "Ghost"},
-            headers=auth_headers,
-        )
-
-        # Assert
-        assert resp.status_code == 404
-
-    @pytest.mark.asyncio
-    async def test_update_event_requires_auth(
-        self, client: AsyncClient, sample_event: Event
-    ) -> None:
-        # Act — no auth header
-        resp = await client.put(f"{PREFIX}/{sample_event.id}", json={"name": "No Auth"})
-
-        # Assert
-        assert resp.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -520,3 +407,115 @@ class TestDeleteEvent:
 
         # Assert
         assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Soft-delete behavior
+# ---------------------------------------------------------------------------
+
+
+class TestSoftDeleteEvent:
+    @pytest.mark.asyncio
+    async def test_delete_event_is_soft_delete(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_event: Event,
+    ) -> None:
+        # Act
+        resp = await client.delete(f"{PREFIX}/{sample_event.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Assert — record still exists with deleted_at set
+        await db_session.refresh(sample_event)
+        assert sample_event.deleted_at is not None
+
+    @pytest.mark.asyncio
+    async def test_list_events_excludes_deleted_by_default(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange
+        e1 = Event(name="Active Event", location_id=sample_location.id)
+        e2 = Event(name="Deleted Event", location_id=sample_location.id)
+        db_session.add_all([e1, e2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{e2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/")
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Event" in names
+        assert "Deleted Event" not in names
+
+    @pytest.mark.asyncio
+    async def test_list_events_includes_deleted_when_requested(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange
+        e1 = Event(name="Active Event 2", location_id=sample_location.id)
+        e2 = Event(name="Deleted Event 2", location_id=sample_location.id)
+        db_session.add_all([e1, e2])
+        await db_session.flush()
+
+        resp = await client.delete(f"{PREFIX}/{e2.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/", params={"include_deleted": True})
+        body = resp.json()
+
+        # Assert
+        names = [item["name"] for item in body["data"]]
+        assert "Active Event 2" in names
+        assert "Deleted Event 2" in names
+
+    @pytest.mark.asyncio
+    async def test_get_deleted_event_returns_404(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_event: Event,
+    ) -> None:
+        # Arrange
+        resp = await client.delete(f"{PREFIX}/{sample_event.id}", headers=auth_headers)
+        assert resp.status_code == 204
+
+        # Act
+        resp = await client.get(f"{PREFIX}/{sample_event.id}")
+
+        # Assert
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_create_event_with_soft_deleted_location_returns_422(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_location: Location,
+    ) -> None:
+        # Arrange — soft-delete the location
+        sample_location.soft_delete()
+        await db_session.flush()
+
+        # Act
+        payload = {"name": "Bad Event", "location_id": sample_location.id}
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 422
+        assert "Location" in resp.json()["detail"]

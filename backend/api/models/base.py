@@ -6,13 +6,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql.elements import ColumnElement
 
 # ============================================================================
-# PostgreSQL Enum Types (all pre-existing, create_type=False when used)
+# PostgreSQL Enum Types
 # ============================================================================
 
 
 class SourceType(str, enum.Enum):
-    primary = "primary"
-    aggregator = "aggregator"
+    crawler = "crawler"
+    api = "api"
+    user_submission = "user_submission"
+    partner_feed = "partner_feed"
 
 
 class CrawlMode(str, enum.Enum):
@@ -20,7 +22,7 @@ class CrawlMode(str, enum.Enum):
     json_api = "json_api"
 
 
-class CrawlRunStatus(str, enum.Enum):
+class CrawlJobStatus(str, enum.Enum):
     running = "running"
     completed = "completed"
     failed = "failed"
@@ -40,28 +42,17 @@ class TagRuleType(str, enum.Enum):
     remove = "remove"
 
 
-class EditAction(str, enum.Enum):
-    INSERT = "INSERT"
-    UPDATE = "UPDATE"
-    DELETE = "DELETE"
+class EventStatus(str, enum.Enum):
+    active = "active"
+    archived = "archived"
+    draft = "draft"
+    cancelled = "cancelled"
 
 
-class EditSource(str, enum.Enum):
-    local = "local"
-    website = "website"
-    crawl = "crawl"
-
-
-class SyncSourceEnum(str, enum.Enum):
-    local = "local"
-    website = "website"
-
-
-class ConflictStatus(str, enum.Enum):
-    pending = "pending"
-    resolved_local = "resolved_local"
-    resolved_website = "resolved_website"
-    resolved_merged = "resolved_merged"
+class LocationType(str, enum.Enum):
+    venue = "venue"
+    area = "area"
+    meeting_point = "meeting_point"
 
 
 # ============================================================================

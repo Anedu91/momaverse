@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from sqlalchemy import TIMESTAMP, Boolean, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
 
@@ -18,9 +18,3 @@ class User(Base):
         TIMESTAMP, server_default=func.current_timestamp()
     )
     last_login_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
-
-    # Relationships
-    edits: Mapped[list["Edit"]] = relationship(back_populates="user")
-    resolved_conflicts: Mapped[list["Conflict"]] = relationship(
-        back_populates="resolved_by_user"
-    )

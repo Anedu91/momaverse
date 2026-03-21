@@ -1,14 +1,10 @@
-from __future__ import annotations
-
 from datetime import datetime
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from api.models.base import LocationType
 from api.schemas.common import TagResponse
-
-if TYPE_CHECKING:
-    from api.schemas.website import WebsiteResponse
 
 __all__ = [
     "LocationCreate",
@@ -30,6 +26,8 @@ class LocationCreate(BaseModel):
     lng: Annotated[float | None, Field(ge=-180, le=180)] = None
     emoji: Annotated[str | None, Field(max_length=10)] = None
     alt_emoji: Annotated[str | None, Field(max_length=10)] = None
+    website_url: Annotated[str | None, Field(max_length=500)] = None
+    type: LocationType = LocationType.venue
     alternate_names: list[str] = []
     tags: list[str] = []
 
@@ -44,6 +42,8 @@ class LocationUpdate(BaseModel):
     lng: Annotated[float | None, Field(ge=-180, le=180)] = None
     emoji: Annotated[str | None, Field(max_length=10)] = None
     alt_emoji: Annotated[str | None, Field(max_length=10)] = None
+    website_url: Annotated[str | None, Field(max_length=500)] = None
+    type: LocationType | None = None
     alternate_names: list[str] | None = None
     tags: list[str] | None = None
 
@@ -61,8 +61,11 @@ class LocationResponse(BaseModel):
     lng: float | None = None
     emoji: str | None = None
     alt_emoji: str | None = None
+    website_url: str | None = None
+    type: LocationType = LocationType.venue
     created_at: datetime
     updated_at: datetime
+    deleted_at: datetime | None = None
 
 
 class AlternateNameResponse(BaseModel):
@@ -70,7 +73,6 @@ class AlternateNameResponse(BaseModel):
 
     id: int
     alternate_name: str
-    website_id: int | None = None
 
 
 class LocationListItem(BaseModel):
@@ -82,9 +84,9 @@ class LocationListItem(BaseModel):
     very_short_name: str | None = None
     emoji: str | None = None
     event_count: int = 0
+    deleted_at: datetime | None = None
 
 
 class LocationDetailResponse(LocationResponse):
     alternate_names: list[AlternateNameResponse] = []
     tags: list[TagResponse] = []
-    websites: list[WebsiteResponse] = []

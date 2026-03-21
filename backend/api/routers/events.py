@@ -1,27 +1,20 @@
-from fastapi import APIRouter, HTTPException, Request, Response, status
-from sqlalchemy import delete, func, select
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
 from api.dependencies import CurrentUserDep, SessionDep
+from api.models.base import EventStatus
 from api.models.event import Event, EventOccurrence, EventTag, EventUrl
 from api.models.location import Location
-from api.models.website import Website
 from api.schemas.common import PaginatedResponse
-from api.schemas.edit import EditResponse
 from api.schemas.event import (
     EventCreate,
     EventDetailResponse,
     EventListItem,
-    EventUpdate,
-)
-from api.services.edit_logger import (
-    get_record_history,
-    log_delete,
-    log_insert,
-    log_updates,
 )
 from api.services.tags import get_or_create_tag
-from api.services.utils import extract_editor_context, snapshot_record
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -36,7 +29,6 @@ async def _refresh_event(db: SessionDep, event_id: int) -> Event:
             selectinload(Event.urls),
             selectinload(Event.tags),
             joinedload(Event.location),
-            joinedload(Event.website),
         )
         .execution_options(populate_existing=True)
     )
@@ -49,13 +41,12 @@ async def _refresh_event(db: SessionDep, event_id: int) -> Event:
 async def _get_event_or_404(db: SessionDep, event_id: int) -> Event:
     stmt = (
         select(Event)
-        .where(Event.id == event_id)
+        .where(Event.id == event_id, Event.active())
         .options(
             selectinload(Event.occurrences),
             selectinload(Event.urls),
             selectinload(Event.tags),
             joinedload(Event.location),
-            joinedload(Event.website),
         )
     )
     event = await db.scalar(stmt)
@@ -67,13 +58,12 @@ async def _get_event_or_404(db: SessionDep, event_id: int) -> Event:
 @router.get("/", response_model=PaginatedResponse[EventListItem])
 async def list_events(
     db: SessionDep,
-    # TODO: Add upper bound validation (e.g. Query(ge=1, le=200)) to prevent
-    # unbounded queries that could exhaust memory.
-    limit: int = 50,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     upcoming: bool = False,
     location_id: int | None = None,
-    website_id: int | None = None,
+    status_filter: EventStatus | None = None,
+    include_deleted: bool = False,
 ) -> PaginatedResponse[EventListItem]:
     next_date_sq = (
         select(func.min(EventOccurrence.start_date))
@@ -90,23 +80,22 @@ async def list_events(
         "location_display_name"
     )
 
-    stmt = (
-        select(
-            Event,
-            next_date_sq,
-            location_display,
-            Website.name.label("website_name"),
-        )
-        .outerjoin(Location, Event.location_id == Location.id)
-        .outerjoin(Website, Event.website_id == Website.id)
-    )
+    stmt = select(
+        Event,
+        next_date_sq,
+        location_display,
+    ).outerjoin(Location, Event.location_id == Location.id)
 
     # Build count query with same filters
     count_stmt = select(func.count(Event.id))
 
+    # Apply soft-delete filter
+    if not include_deleted:
+        stmt = stmt.where(Event.active())
+        count_stmt = count_stmt.where(Event.active())
+
     # Apply filters
     if upcoming:
-        # Only events with a future occurrence
         upcoming_sq = (
             select(func.min(EventOccurrence.start_date))
             .where(
@@ -123,9 +112,9 @@ async def list_events(
         stmt = stmt.where(Event.location_id == location_id)
         count_stmt = count_stmt.where(Event.location_id == location_id)
 
-    if website_id is not None:
-        stmt = stmt.where(Event.website_id == website_id)
-        count_stmt = count_stmt.where(Event.website_id == website_id)
+    if status_filter is not None:
+        stmt = stmt.where(Event.status == status_filter)
+        count_stmt = count_stmt.where(Event.status == status_filter)
 
     stmt = (
         stmt.order_by(
@@ -148,13 +137,10 @@ async def list_events(
             emoji=event.emoji,
             location_id=event.location_id,
             location_display_name=loc_display,
-            website_id=event.website_id,
-            website_name=ws_name,
+            status=event.status,
             next_date=next_date,
-            archived=event.archived,
-            suppressed=event.suppressed,
         )
-        for event, next_date, loc_display, ws_name in rows
+        for event, next_date, loc_display in rows
     ]
     return PaginatedResponse(data=data, total=total)
 
@@ -168,38 +154,23 @@ async def get_event(
     return EventDetailResponse.model_validate(event)
 
 
-@router.get("/{event_id}/history", response_model=list[EditResponse])
-async def get_event_history(
-    event_id: int,
-    db: SessionDep,
-    _user: CurrentUserDep,
-) -> list[EditResponse]:
-    edits = await get_record_history(db, table_name="events", record_id=event_id)
-    return [EditResponse.model_validate(e) for e in edits]
-
-
 @router.post(
     "/", response_model=EventDetailResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_event(
     data: EventCreate,
-    request: Request,
     db: SessionDep,
     user: CurrentUserDep,
 ) -> EventDetailResponse:
-    # Validate FK references if provided
-    if data.location_id is not None:
-        loc = await db.scalar(
-            select(Location.id).where(Location.id == data.location_id)
+    # Validate FK reference (reject soft-deleted locations)
+    loc = await db.scalar(
+        select(Location.id).where(Location.id == data.location_id, Location.active())
+    )
+    if loc is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=f"Location {data.location_id} not found",
         )
-        if loc is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Location {data.location_id} not found",
-            )
-
-    # TODO: Validate website_id FK if added to EventCreate schema. Currently
-    # events are linked to websites via crawling, not manual creation.
 
     event = Event(
         name=data.name,
@@ -207,13 +178,12 @@ async def create_event(
         description=data.description,
         emoji=data.emoji,
         location_id=data.location_id,
-        location_name=data.location_name,
         sublocation=data.sublocation,
     )
     db.add(event)
     await db.flush()
 
-    for idx, occ in enumerate(data.occurrences):
+    for occ in data.occurrences:
         db.add(
             EventOccurrence(
                 event_id=event.id,
@@ -221,109 +191,15 @@ async def create_event(
                 start_time=occ.start_time,
                 end_date=occ.end_date,
                 end_time=occ.end_time,
-                sort_order=idx,
             )
         )
 
-    for idx, url in enumerate(data.urls):
-        db.add(EventUrl(event_id=event.id, url=url, sort_order=idx))
+    for url in data.urls:
+        db.add(EventUrl(event_id=event.id, url=url))
 
     for tag_name in data.tags:
         tag = await get_or_create_tag(db, tag_name)
         db.add(EventTag(event_id=event.id, tag_id=tag.id))
-
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_insert(
-        db,
-        table_name="events",
-        record_id=event.id,
-        record_data=snapshot_record(event),
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
-
-    await db.commit()
-    event = await _refresh_event(db, event.id)
-    return EventDetailResponse.model_validate(event)
-
-
-@router.put("/{event_id}", response_model=EventDetailResponse)
-async def update_event(
-    event_id: int,
-    data: EventUpdate,
-    request: Request,
-    db: SessionDep,
-    user: CurrentUserDep,
-) -> EventDetailResponse:
-    event = await _get_event_or_404(db, event_id)
-    old_data = snapshot_record(event)
-
-    update_fields = data.model_dump(exclude_unset=True)
-    scalar_fields = {
-        k: v
-        for k, v in update_fields.items()
-        if k not in ("occurrences", "urls", "tags")
-    }
-
-    # Validate location_id FK if being updated
-    if "location_id" in scalar_fields and scalar_fields["location_id"] is not None:
-        loc = await db.scalar(
-            select(Location.id).where(Location.id == scalar_fields["location_id"])
-        )
-        if loc is None:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                detail=f"Location {scalar_fields['location_id']} not found",
-            )
-
-    for field, value in scalar_fields.items():
-        setattr(event, field, value)
-
-    # Replace occurrences if provided
-    if "occurrences" in update_fields:
-        await db.execute(
-            delete(EventOccurrence).where(EventOccurrence.event_id == event.id)
-        )
-        for idx, occ in enumerate(data.occurrences):  # type: ignore[arg-type]
-            db.add(
-                EventOccurrence(
-                    event_id=event.id,
-                    start_date=occ.start_date,
-                    start_time=occ.start_time,
-                    end_date=occ.end_date,
-                    end_time=occ.end_time,
-                    sort_order=idx,
-                )
-            )
-
-    # Replace urls if provided
-    if "urls" in update_fields:
-        await db.execute(delete(EventUrl).where(EventUrl.event_id == event.id))
-        for idx, url in enumerate(data.urls):  # type: ignore[arg-type]
-            db.add(EventUrl(event_id=event.id, url=url, sort_order=idx))
-
-    # Replace tags if provided
-    if "tags" in update_fields:
-        await db.execute(delete(EventTag).where(EventTag.event_id == event.id))
-        for tag_name in data.tags or []:
-            tag = await get_or_create_tag(db, tag_name)
-            db.add(EventTag(event_id=event.id, tag_id=tag.id))
-
-    new_data = snapshot_record(event)
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_updates(
-        db,
-        table_name="events",
-        record_id=event.id,
-        old_record=old_data,
-        new_record=new_data,
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
 
     await db.commit()
     event = await _refresh_event(db, event.id)
@@ -333,31 +209,11 @@ async def update_event(
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_event(
     event_id: int,
-    request: Request,
     db: SessionDep,
     user: CurrentUserDep,
 ) -> Response:
     event = await _get_event_or_404(db, event_id)
 
-    record_data = snapshot_record(event)
-    editor_ip, editor_user_agent = extract_editor_context(request)
-
-    await log_delete(
-        db,
-        table_name="events",
-        record_id=event.id,
-        record_data=record_data,
-        user_id=user.id,
-        editor_ip=editor_ip,
-        editor_user_agent=editor_user_agent,
-    )
-
-    # Delete children before parent (ORM delete doesn't use DB CASCADE)
-    await db.execute(
-        delete(EventOccurrence).where(EventOccurrence.event_id == event.id)
-    )
-    await db.execute(delete(EventUrl).where(EventUrl.event_id == event.id))
-    await db.execute(delete(EventTag).where(EventTag.event_id == event.id))
-    await db.delete(event)
+    event.soft_delete()
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

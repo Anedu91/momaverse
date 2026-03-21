@@ -2,16 +2,12 @@
 
 from sqladmin import ModelView
 
-from api.models.crawl import CrawlResult, CrawlRun
-from api.models.edit import Conflict, Edit
+from api.models.crawl import CrawlContent, CrawlJob, CrawlResult, ExtractedEvent
 from api.models.event import Event, EventOccurrence, EventSource
-from api.models.feedback import Feedback
-from api.models.grantee import Grantee
-from api.models.instagram import InstagramAccount
 from api.models.location import Location
+from api.models.source import CrawlConfig, Source
 from api.models.tag import Tag, TagRule
 from api.models.user import User
-from api.models.website import Website
 
 
 # ---------------------------------------------------------------------------
@@ -23,23 +19,22 @@ class LocationAdmin(ModelView, model=Location):
     name = "Location"
     name_plural = "Locations"
     icon = "fa-solid fa-map-marker-alt"
-    column_list = ["id", "name", "address", "lat", "lng", "emoji"]
+    column_list = ["id", "name", "address", "lat", "lng", "emoji", "type"]
     column_searchable_list = ["name"]
 
 
-class WebsiteAdmin(ModelView, model=Website):
-    name = "Website"
-    name_plural = "Websites"
+class SourceAdmin(ModelView, model=Source):
+    name = "Source"
+    name_plural = "Sources"
     icon = "fa-solid fa-globe"
     column_list = [
         "id",
         "name",
-        "base_url",
-        "crawl_frequency",
+        "type",
+        "trust_level",
         "disabled",
-        "last_crawled_at",
     ]
-    column_searchable_list = ["name", "base_url"]
+    column_searchable_list = ["name"]
 
 
 class EventAdmin(ModelView, model=Event):
@@ -50,9 +45,8 @@ class EventAdmin(ModelView, model=Event):
         "id",
         "name",
         "emoji",
-        "location_name",
-        "archived",
-        "suppressed",
+        "location_id",
+        "status",
     ]
     column_searchable_list = ["name"]
 
@@ -70,22 +64,44 @@ class TagAdmin(ModelView, model=Tag):
 # ---------------------------------------------------------------------------
 
 
-class CrawlRunAdmin(ModelView, model=CrawlRun):
-    name = "Crawl Run"
-    name_plural = "Crawl Runs"
+class CrawlJobAdmin(ModelView, model=CrawlJob):
+    name = "Crawl Job"
+    name_plural = "Crawl Jobs"
     icon = "fa-solid fa-spider"
-    column_list = ["id", "run_date", "status", "started_at", "completed_at"]
+    column_list = ["id", "status", "started_at", "completed_at"]
 
 
 class CrawlResultAdmin(ModelView, model=CrawlResult):
     name = "Crawl Result"
     name_plural = "Crawl Results"
     icon = "fa-solid fa-file-lines"
-    column_list = ["id", "website_id", "filename", "event_count", "status"]
+    column_list = ["id", "source_id", "crawl_job_id", "status"]
+
+
+class CrawlContentAdmin(ModelView, model=CrawlContent):
+    name = "Crawl Content"
+    name_plural = "Crawl Contents"
+    icon = "fa-solid fa-file-alt"
+    column_list = ["id", "crawl_result_id"]
     # Exclude large text fields from forms, detail views, and exports
     form_excluded_columns = ["crawled_content", "extracted_content"]
     column_details_exclude_list = ["crawled_content", "extracted_content"]
     column_export_exclude_list = ["crawled_content", "extracted_content"]
+
+
+class ExtractedEventAdmin(ModelView, model=ExtractedEvent):
+    name = "Extracted Event"
+    name_plural = "Extracted Events"
+    icon = "fa-solid fa-calendar-check"
+    column_list = ["id", "crawl_result_id", "name", "created_at"]
+    column_searchable_list = ["name"]
+
+
+class CrawlConfigAdmin(ModelView, model=CrawlConfig):
+    name = "Crawl Config"
+    name_plural = "Crawl Configs"
+    icon = "fa-solid fa-cog"
+    column_list = ["id", "source_id", "crawl_mode", "crawl_frequency"]
 
 
 # ---------------------------------------------------------------------------
@@ -104,30 +120,6 @@ class UserAdmin(ModelView, model=User):
     column_details_exclude_list = ["password_hash"]
 
 
-class EditAdmin(ModelView, model=Edit):
-    name = "Edit"
-    name_plural = "Edits"
-    icon = "fa-solid fa-pen"
-    can_create = False
-    can_edit = False
-    can_delete = False
-    column_list = [
-        "id",
-        "table_name",
-        "record_id",
-        "action",
-        "source",
-        "created_at",
-    ]
-
-
-class ConflictAdmin(ModelView, model=Conflict):
-    name = "Conflict"
-    name_plural = "Conflicts"
-    icon = "fa-solid fa-triangle-exclamation"
-    column_list = ["id", "table_name", "record_id", "status", "created_at"]
-
-
 # ---------------------------------------------------------------------------
 # Additional / secondary models
 # ---------------------------------------------------------------------------
@@ -138,31 +130,6 @@ class TagRuleAdmin(ModelView, model=TagRule):
     name_plural = "Tag Rules"
     icon = "fa-solid fa-gavel"
     column_list = ["id", "rule_type", "pattern", "replacement"]
-
-
-class GranteeAdmin(ModelView, model=Grantee):
-    name = "Grantee"
-    name_plural = "Grantees"
-    icon = "fa-solid fa-hand-holding-dollar"
-    column_list = ["id", "name", "area", "website_id"]
-
-
-class InstagramAccountAdmin(ModelView, model=InstagramAccount):
-    name = "Instagram Account"
-    name_plural = "Instagram Accounts"
-    icon = "fa-brands fa-instagram"
-    column_list = ["id", "handle", "name", "description"]
-    column_searchable_list = ["handle", "name"]
-
-
-class FeedbackAdmin(ModelView, model=Feedback):
-    name = "Feedback"
-    name_plural = "Feedback"
-    icon = "fa-solid fa-comment"
-    can_create = False
-    can_edit = False
-    can_delete = False
-    column_list = ["id", "message", "page_url", "created_at"]
 
 
 class EventOccurrenceAdmin(ModelView, model=EventOccurrence):
@@ -176,24 +143,29 @@ class EventSourceAdmin(ModelView, model=EventSource):
     name = "Event Source"
     name_plural = "Event Sources"
     icon = "fa-solid fa-link"
-    column_list = ["id", "event_id", "crawl_event_id", "is_primary", "created_at"]
+    column_list = [
+        "id",
+        "event_id",
+        "extracted_event_id",
+        "source_id",
+        "is_primary",
+        "created_at",
+    ]
 
 
 # All view classes in registration order
 ALL_VIEWS: list[type[ModelView]] = [
     LocationAdmin,
-    WebsiteAdmin,
+    SourceAdmin,
     EventAdmin,
     TagAdmin,
-    CrawlRunAdmin,
+    CrawlJobAdmin,
     CrawlResultAdmin,
+    CrawlContentAdmin,
+    ExtractedEventAdmin,
+    CrawlConfigAdmin,
     UserAdmin,
-    EditAdmin,
-    ConflictAdmin,
     TagRuleAdmin,
-    GranteeAdmin,
-    InstagramAccountAdmin,
-    FeedbackAdmin,
     EventOccurrenceAdmin,
     EventSourceAdmin,
 ]
