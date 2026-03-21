@@ -1,27 +1,37 @@
-from fastapi import APIRouter, HTTPException, Response, status
-from sqlalchemy import select
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
+from sqlalchemy import func, select
 
 from api.dependencies import CurrentUserDep, SessionDep
 from api.models.tag import TagRule
+from api.schemas.common import PaginatedResponse
 from api.schemas.tag_rule import TagRuleCreate, TagRuleResponse, TagRuleUpdate
 
 router = APIRouter(prefix="/tag-rules", tags=["tag-rules"])
 
 
-@router.get("/", response_model=list[TagRuleResponse])
+@router.get("/", response_model=PaginatedResponse[TagRuleResponse])
 async def list_tag_rules(
     db: SessionDep,
     user: CurrentUserDep,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     include_deleted: bool = False,
-) -> list[TagRuleResponse]:
-    stmt = select(TagRule).order_by(TagRule.id)
+) -> PaginatedResponse[TagRuleResponse]:
+    stmt = select(TagRule).order_by(TagRule.id).limit(limit).offset(offset)
+    count_stmt = select(func.count(TagRule.id))
 
     if not include_deleted:
         stmt = stmt.where(TagRule.active())
+        count_stmt = count_stmt.where(TagRule.active())
 
     result = await db.execute(stmt)
     rules = result.scalars().all()
-    return [TagRuleResponse.model_validate(r) for r in rules]
+    total = await db.scalar(count_stmt) or 0
+
+    data = [TagRuleResponse.model_validate(r) for r in rules]
+    return PaginatedResponse(data=data, total=total)
 
 
 @router.post("/", response_model=TagRuleResponse, status_code=status.HTTP_201_CREATED)

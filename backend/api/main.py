@@ -1,14 +1,27 @@
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.exc import IntegrityError
 
 from api.admin import setup_admin
 from api.routers import auth, crawl_jobs, events, feed, locations, sources, tag_rules
 
 app = FastAPI(title="Momaverse API")
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error_handler(
+    request: Request, exc: IntegrityError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=409,
+        content={"detail": "Conflict: duplicate or constraint violation"},
+    )
+
 
 cors_origins = os.environ.get("CORS_ORIGINS", "*").split(",")
 

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import selectinload
 
@@ -52,8 +54,8 @@ async def _get_location_or_404(db: SessionDep, location_id: int) -> Location:
 @router.get("/", response_model=PaginatedResponse[LocationListItem])
 async def list_locations(
     db: SessionDep,
-    limit: int = 50,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     include_deleted: bool = False,
 ) -> PaginatedResponse[LocationListItem]:
     event_count_sq = (

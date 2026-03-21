@@ -2,7 +2,7 @@ from datetime import date, timedelta
 
 from fastapi import APIRouter
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from api.dependencies import SessionDep
 from api.models.base import EventStatus
@@ -38,7 +38,7 @@ async def feed_events(db: SessionDep) -> list[dict[str, object]]:
             selectinload(Event.occurrences),
             selectinload(Event.urls),
             selectinload(Event.tags),
-            selectinload(Event.location),
+            joinedload(Event.location),
         )
     )
 

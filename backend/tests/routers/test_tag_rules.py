@@ -78,7 +78,7 @@ class TestListTagRules:
     ) -> None:
         resp = await client.get(f"{PREFIX}/", headers=auth_headers)
         assert resp.status_code == 200
-        assert resp.json() == []
+        assert resp.json() == {"data": [], "total": 0}
 
     @pytest.mark.asyncio
     async def test_list_tag_rules_returns_items(
@@ -90,8 +90,8 @@ class TestListTagRules:
         resp = await client.get(f"{PREFIX}/", headers=auth_headers)
         assert resp.status_code == 200
         body = resp.json()
-        assert len(body) >= 1
-        assert body[0]["pattern"] == "old-tag"
+        assert len(body["data"]) >= 1
+        assert body["data"][0]["pattern"] == "old-tag"
 
     @pytest.mark.asyncio
     async def test_list_tag_rules_requires_auth(self, client: AsyncClient) -> None:
@@ -254,7 +254,7 @@ class TestSoftDeleteTagRule:
         body = resp.json()
 
         # Assert
-        patterns = [item["pattern"] for item in body]
+        patterns = [item["pattern"] for item in body["data"]]
         assert "keep-me" in patterns
         assert "delete-me" not in patterns
 
@@ -281,7 +281,7 @@ class TestSoftDeleteTagRule:
         body = resp.json()
 
         # Assert
-        patterns = [item["pattern"] for item in body]
+        patterns = [item["pattern"] for item in body["data"]]
         assert "keep-me-2" in patterns
         assert "delete-me-2" in patterns
 

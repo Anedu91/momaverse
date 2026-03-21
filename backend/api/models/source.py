@@ -10,7 +10,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -53,8 +52,6 @@ class SourceUrl(SoftDeleteMixin, Base):
 
 class CrawlConfig(Base):
     __tablename__ = "crawl_configs"
-    __table_args__ = (UniqueConstraint("source_id"),)
-
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     source_id: Mapped[int] = mapped_column(
         ForeignKey("sources.id", ondelete="CASCADE"), unique=True

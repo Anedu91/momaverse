@@ -125,7 +125,6 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["source_id"], ["sources.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("source_id"),
-        sa.UniqueConstraint("source_id"),
     )
     op.create_table(
         "source_urls",

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -19,8 +21,8 @@ router = APIRouter(prefix="/crawl-jobs", tags=["crawl-jobs"])
 async def list_crawl_jobs(
     db: SessionDep,
     user: CurrentUserDep,
-    limit: int = 50,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     status_filter: CrawlJobStatus | None = None,
 ) -> PaginatedResponse[CrawlJobListItem]:
     stmt = select(CrawlJob).order_by(CrawlJob.started_at.desc())

@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -56,8 +58,8 @@ async def _get_event_or_404(db: SessionDep, event_id: int) -> Event:
 @router.get("/", response_model=PaginatedResponse[EventListItem])
 async def list_events(
     db: SessionDep,
-    limit: int = 50,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     upcoming: bool = False,
     location_id: int | None = None,
     status_filter: EventStatus | None = None,

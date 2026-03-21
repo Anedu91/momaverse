@@ -1,4 +1,6 @@
-from fastapi import APIRouter, HTTPException, Response, status
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import selectinload
 
@@ -55,8 +57,8 @@ async def _refresh_source(db: SessionDep, source_id: int) -> Source:
 async def list_sources(
     db: SessionDep,
     user: CurrentUserDep,
-    limit: int = 50,
-    offset: int = 0,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
     include_deleted: bool = False,
 ) -> PaginatedResponse[SourceListItem]:
     stmt = select(Source).order_by(Source.name).limit(limit).offset(offset)
