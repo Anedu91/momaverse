@@ -713,7 +713,7 @@ async def extract_large_page(
     if total_batches_needed > max_batches:
         print(
             f"    - WARNING: {len(all_simple_events)} events would need {total_batches_needed} batches, capping at {max_batches} ({max_events} events). "
-            f"Set max_batches in websites table to override."
+            f"Set max_batches in crawl_configs table to override."
         )
         all_simple_events = all_simple_events[:max_events]
 
