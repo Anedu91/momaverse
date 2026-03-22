@@ -42,6 +42,14 @@ class TagRuleType(str, enum.Enum):
     remove = "remove"
 
 
+class ExtractedEventStatus(str, enum.Enum):
+    created = "created"
+    merged = "merged"
+    skipped_no_location = "skipped_no_location"
+    skipped_no_occurrences = "skipped_no_occurrences"
+    skipped_duplicate = "skipped_duplicate"
+
+
 class EventStatus(str, enum.Enum):
     active = "active"
     archived = "archived"

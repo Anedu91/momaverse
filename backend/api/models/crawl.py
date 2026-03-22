@@ -14,7 +14,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
-from api.models.base import CrawlJobStatus, CrawlResultStatus
+from api.models.base import CrawlJobStatus, CrawlResultStatus, ExtractedEventStatus
 
 
 class CrawlJob(Base):
@@ -111,3 +111,29 @@ class ExtractedEvent(Base):
     event_sources: Mapped[list["EventSource"]] = relationship(
         back_populates="extracted_event"
     )
+    logs: Mapped[list["ExtractedEventLog"]] = relationship(
+        back_populates="extracted_event"
+    )
+
+
+class ExtractedEventLog(Base):
+    __tablename__ = "extracted_event_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    extracted_event_id: Mapped[int] = mapped_column(
+        ForeignKey("extracted_events.id", ondelete="CASCADE")
+    )
+    status: Mapped[ExtractedEventStatus] = mapped_column(
+        Enum(ExtractedEventStatus, name="extracted_event_status")
+    )
+    event_id: Mapped[int | None] = mapped_column(
+        ForeignKey("events.id", ondelete="SET NULL")
+    )
+    message: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, server_default=func.current_timestamp()
+    )
+
+    # Relationships
+    extracted_event: Mapped["ExtractedEvent"] = relationship(back_populates="logs")
+    event: Mapped["Event | None"] = relationship()

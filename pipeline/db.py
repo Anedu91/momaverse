@@ -2,9 +2,9 @@
 Database operations for the event processing pipeline.
 
 Handles all database connections and CRUD operations for:
-- Crawl runs and results
-- Websites and their crawl status
-- Crawl events (raw extracted data)
+- Crawl jobs and results
+- Sources and their crawl status
+- Extracted events (raw extracted data)
 """
 
 import json
@@ -73,66 +73,69 @@ def _parse_url_data(url_string):
     return urls
 
 
-def get_websites_due_for_crawling(cursor, website_ids=None):
+def get_sources_due_for_crawling(cursor, source_ids=None):
     """
-    Get websites that are due for crawling based on crawl_frequency.
+    Get sources that are due for crawling based on crawl_frequency.
 
     Args:
         cursor: Database cursor
-        website_ids: Optional list of website IDs to filter by. If provided,
-                     only these websites are returned (ignoring crawl_frequency).
+        source_ids: Optional list of source IDs to filter by. If provided,
+                    only these sources are returned (ignoring crawl_frequency).
 
-    Returns websites where:
+    Returns sources where:
     - disabled = FALSE
     - crawl_after is NULL or in the past
     - last_crawled_at is NULL, OR
     - NOW() - last_crawled_at > crawl_frequency days
     """
-    if website_ids:
-        # When specific IDs are provided, ignore crawl_frequency
-        placeholders = ",".join(["%s"] * len(website_ids))
+    if source_ids:
+        placeholders = ",".join(["%s"] * len(source_ids))
         cursor.execute(
             f"""
-            SELECT w.id, w.name, w.crawl_frequency, w.selector, w.num_clicks,
-                   w.keywords, w.max_pages, w.max_batches, w.notes,
-                   w.delay_before_return_html, w.content_filter_threshold, w.scan_full_page,
-                   w.remove_overlay_elements, w.javascript_enabled, w.text_mode, w.light_mode,
-                   w.use_stealth, w.scroll_delay, w.crawl_timeout, w.process_images, w.base_url,
-                   w.crawl_mode, w.json_api_config,
-                   STRING_AGG(CONCAT(wu.url, ':::', COALESCE(wu.js_code, '')) , '|||' ORDER BY wu.sort_order) as urls
-            FROM websites w
-            LEFT JOIN website_urls wu ON w.id = wu.website_id
-            WHERE w.id IN ({placeholders})
-            GROUP BY w.id
-            HAVING STRING_AGG(wu.url, '') IS NOT NULL OR w.crawl_mode = 'json_api'
-            ORDER BY w.id ASC
+            SELECT s.id, s.name, cc.crawl_frequency, cc.selector, cc.num_clicks,
+                   cc.keywords, cc.max_pages, cc.max_batches, cc.notes,
+                   cc.delay_before_return_html, cc.content_filter_threshold, cc.scan_full_page,
+                   cc.remove_overlay_elements, cc.javascript_enabled, cc.text_mode, cc.light_mode,
+                   cc.use_stealth, cc.scroll_delay, cc.crawl_timeout, cc.process_images,
+                   cc.crawl_mode, cc.json_api_config,
+                   STRING_AGG(CONCAT(su.url, ':::', COALESCE(su.js_code, '')), '|||' ORDER BY su.sort_order) as urls
+            FROM sources s
+            JOIN crawl_configs cc ON cc.source_id = s.id
+            LEFT JOIN source_urls su ON su.source_id = s.id AND su.deleted_at IS NULL
+            WHERE s.id IN ({placeholders})
+              AND s.deleted_at IS NULL
+            GROUP BY s.id, s.name, cc.id
+            HAVING STRING_AGG(su.url, '') IS NOT NULL OR cc.crawl_mode = 'json_api'
+            ORDER BY s.id ASC
         """,
-            website_ids,
+            source_ids,
         )
     else:
         cursor.execute("""
-            SELECT w.id, w.name, w.crawl_frequency, w.selector, w.num_clicks,
-                   w.keywords, w.max_pages, w.max_batches, w.notes,
-                   w.delay_before_return_html, w.content_filter_threshold, w.scan_full_page,
-                   w.remove_overlay_elements, w.javascript_enabled, w.text_mode, w.light_mode,
-                   w.use_stealth, w.scroll_delay, w.crawl_timeout, w.process_images, w.base_url,
-                   w.crawl_mode, w.json_api_config,
-                   STRING_AGG(CONCAT(wu.url, ':::', COALESCE(wu.js_code, '')), '|||' ORDER BY wu.sort_order) as urls
-            FROM websites w
-            LEFT JOIN website_urls wu ON w.id = wu.website_id
-            WHERE w.disabled = FALSE
-              AND (w.crawl_after IS NULL OR w.crawl_after <= CURRENT_DATE)
-              AND (w.force_crawl = TRUE
-                   OR w.last_crawled_at IS NULL
-                   OR EXTRACT(DAY FROM NOW() - w.last_crawled_at) >= COALESCE(w.crawl_frequency, 7))
-            GROUP BY w.id
-            HAVING STRING_AGG(wu.url, '') IS NOT NULL OR w.crawl_mode = 'json_api'
-            ORDER BY w.force_crawl DESC, w.last_crawled_at ASC NULLS LAST
+            SELECT s.id, s.name, cc.crawl_frequency, cc.selector, cc.num_clicks,
+                   cc.keywords, cc.max_pages, cc.max_batches, cc.notes,
+                   cc.delay_before_return_html, cc.content_filter_threshold, cc.scan_full_page,
+                   cc.remove_overlay_elements, cc.javascript_enabled, cc.text_mode, cc.light_mode,
+                   cc.use_stealth, cc.scroll_delay, cc.crawl_timeout, cc.process_images,
+                   cc.crawl_mode, cc.json_api_config,
+                   STRING_AGG(CONCAT(su.url, ':::', COALESCE(su.js_code, '')), '|||' ORDER BY su.sort_order) as urls
+            FROM sources s
+            JOIN crawl_configs cc ON cc.source_id = s.id
+            LEFT JOIN source_urls su ON su.source_id = s.id AND su.deleted_at IS NULL
+            WHERE s.disabled = FALSE
+              AND s.deleted_at IS NULL
+              AND (cc.crawl_after IS NULL OR cc.crawl_after <= CURRENT_DATE)
+              AND (cc.force_crawl = TRUE
+                   OR cc.last_crawled_at IS NULL
+                   OR EXTRACT(DAY FROM NOW() - cc.last_crawled_at) >= COALESCE(cc.crawl_frequency, 7))
+            GROUP BY s.id, s.name, cc.id
+            HAVING STRING_AGG(su.url, '') IS NOT NULL OR cc.crawl_mode = 'json_api'
+            ORDER BY cc.force_crawl DESC, cc.last_crawled_at ASC NULLS LAST
         """)
 
-    websites = []
+    sources = []
     for row in cursor.fetchall():
-        website = {
+        source = {
             "id": row[0],
             "name": row[1],
             "crawl_frequency": row[2] or 7,
@@ -153,42 +156,38 @@ def get_websites_due_for_crawling(cursor, website_ids=None):
             "scroll_delay": float(row[17]) if row[17] is not None else None,
             "crawl_timeout": row[18],
             "process_images": row[19],
-            "base_url": row[20],
-            "crawl_mode": row[21] or "browser",
-            "json_api_config": row[22]
-            if isinstance(row[22], dict)
-            else (json.loads(row[22]) if row[22] else {}),
-            "urls": _parse_url_data(row[23]) if row[23] else [],
+            "crawl_mode": row[20] or "browser",
+            "json_api_config": row[21]
+            if isinstance(row[21], dict)
+            else (json.loads(row[21]) if row[21] else {}),
+            "urls": _parse_url_data(row[22]) if row[22] else [],
         }
-        websites.append(website)
+        sources.append(source)
 
-    return websites
+    return sources
 
 
-def get_or_create_crawl_run(cursor, connection, run_date):
-    """Get or create a crawl run for the given date."""
-    cursor.execute("SELECT id FROM crawl_runs WHERE run_date = %s", (run_date,))
-    result = cursor.fetchone()
-    if result:
-        return result[0]
-
+def create_crawl_job(cursor, connection):
+    """Create a new crawl job and return its id."""
     cursor.execute(
-        "INSERT INTO crawl_runs (run_date, status, started_at) VALUES (%s, 'running', NOW()) RETURNING id",
-        (run_date,),
+        "INSERT INTO crawl_jobs (status, started_at) VALUES ('running', NOW()) RETURNING id",
     )
     new_id = cursor.fetchone()[0]
     connection.commit()
     return new_id
 
 
-def create_crawl_result(cursor, connection, crawl_run_id, website_id, filename):
-    """Create a new crawl result record."""
+def create_crawl_result(cursor, connection, crawl_job_id, source_id, _filename=None):
+    """Create a new crawl result record.
+
+    _filename is accepted for backward compatibility but ignored (column dropped).
+    """
     cursor.execute(
-        """INSERT INTO crawl_results (crawl_run_id, website_id, filename, status, created_at)
-           VALUES (%s, %s, %s, 'pending', NOW())
-           ON CONFLICT (crawl_run_id, filename) DO UPDATE SET status = 'pending'
+        """INSERT INTO crawl_results (crawl_job_id, source_id, status, created_at)
+           VALUES (%s, %s, 'pending', NOW())
+           ON CONFLICT (crawl_job_id, source_id) DO UPDATE SET status = 'pending'
            RETURNING id""",
-        (crawl_run_id, website_id, filename),
+        (crawl_job_id, source_id),
     )
     new_id = cursor.fetchone()[0]
     connection.commit()
@@ -199,17 +198,19 @@ def update_crawl_result(cursor, connection, crawl_result_id, status, **kwargs):
     """
     Generic update function for crawl results.
 
+    Status and timestamps are stored on crawl_results. Content (crawled_content,
+    extracted_content) is stored in the crawl_contents table.
+
     Args:
         cursor: Database cursor
         connection: Database connection
         crawl_result_id: ID of the crawl result to update
         status: New status value
-        **kwargs: Additional fields to update (content, event_count, error_message)
+        **kwargs: Additional fields to update (content, error_message)
     """
     updates = ["status = %s"]
     params = [status]
 
-    # Map status to timestamp field
     timestamp_map = {
         "crawled": "crawled_at",
         "extracted": "extracted_at",
@@ -217,18 +218,6 @@ def update_crawl_result(cursor, connection, crawl_result_id, status, **kwargs):
     }
     if status in timestamp_map:
         updates.append(f"{timestamp_map[status]} = NOW()")
-
-    # Handle optional fields
-    if "content" in kwargs:
-        if status == "crawled":
-            updates.append("crawled_content = %s")
-        elif status == "extracted":
-            updates.append("extracted_content = %s")
-        params.append(kwargs["content"])
-
-    if "event_count" in kwargs:
-        updates.append("event_count = %s")
-        params.append(kwargs["event_count"])
 
     if "error_message" in kwargs:
         updates.append("error_message = %s")
@@ -240,6 +229,25 @@ def update_crawl_result(cursor, connection, crawl_result_id, status, **kwargs):
     cursor.execute(
         f"UPDATE crawl_results SET {', '.join(updates)} WHERE id = %s", tuple(params)
     )
+
+    # Content lives in crawl_contents (1:1 with crawl_results)
+    if "content" in kwargs:
+        content_value = kwargs["content"]
+        if status == "crawled":
+            column = "crawled_content"
+        elif status == "extracted":
+            column = "extracted_content"
+        else:
+            column = None
+
+        if column:
+            cursor.execute(
+                f"""INSERT INTO crawl_contents (crawl_result_id, {column})
+                    VALUES (%s, %s)
+                    ON CONFLICT (crawl_result_id) DO UPDATE SET {column} = EXCLUDED.{column}""",
+                (crawl_result_id, content_value),
+            )
+
     connection.commit()
 
 
@@ -255,11 +263,14 @@ def update_crawl_result_extracted(cursor, connection, crawl_result_id, content):
     )
 
 
-def update_crawl_result_processed(cursor, connection, crawl_result_id, event_count):
-    """Update crawl result as processed."""
-    update_crawl_result(
-        cursor, connection, crawl_result_id, "processed", event_count=event_count
-    )
+def update_crawl_result_processed(
+    cursor, connection, crawl_result_id, _event_count=None
+):
+    """Update crawl result as processed.
+
+    _event_count is accepted for backward compatibility but ignored (column dropped).
+    """
+    update_crawl_result(cursor, connection, crawl_result_id, "processed")
 
 
 def update_crawl_result_failed(cursor, connection, crawl_result_id, error_message):
@@ -269,20 +280,20 @@ def update_crawl_result_failed(cursor, connection, crawl_result_id, error_messag
     )
 
 
-def update_website_last_crawled(cursor, connection, website_id):
-    """Update the last_crawled_at timestamp for a website and reset force_crawl flag."""
+def update_source_last_crawled(cursor, connection, source_id):
+    """Update the last_crawled_at timestamp for a source and reset force_crawl flag."""
     cursor.execute(
-        "UPDATE websites SET last_crawled_at = NOW(), force_crawl = FALSE WHERE id = %s",
-        (website_id,),
+        "UPDATE crawl_configs SET last_crawled_at = NOW(), force_crawl = FALSE WHERE source_id = %s",
+        (source_id,),
     )
     connection.commit()
 
 
-def complete_crawl_run(cursor, connection, crawl_run_id):
-    """Mark a crawl run as completed."""
+def complete_crawl_job(cursor, connection, crawl_job_id):
+    """Mark a crawl job as completed."""
     cursor.execute(
-        "UPDATE crawl_runs SET status = 'completed', completed_at = NOW() WHERE id = %s",
-        (crawl_run_id,),
+        "UPDATE crawl_jobs SET status = 'completed', completed_at = NOW() WHERE id = %s",
+        (crawl_job_id,),
     )
     connection.commit()
 
@@ -296,26 +307,29 @@ def get_incomplete_crawl_results(cursor):
     - In 'extracted' status (need processing)
     - In 'failed' status but have crawled_content (extraction failed, can retry)
 
-    Returns results from any crawl run, not just today's.
+    Returns results from any crawl job, not just today's.
     """
     cursor.execute("""
-        SELECT cr.id, cr.status, cr.website_id, cr.crawl_run_id,
-               w.name, w.notes, crun.run_date,
+        SELECT cr.id, cr.status, cr.source_id, cr.crawl_job_id,
+               s.name, cc.notes, cj.started_at,
                CASE
-                   WHEN cr.status = 'failed' AND cr.crawled_content IS NOT NULL
-                        AND cr.extracted_content IS NULL THEN 'crawled'
-                   WHEN cr.status = 'failed' AND cr.extracted_content IS NOT NULL THEN 'extracted'
+                   WHEN cr.status = 'failed' AND cnt.crawled_content IS NOT NULL
+                        AND cnt.extracted_content IS NULL THEN 'crawled'
+                   WHEN cr.status = 'failed' AND cnt.extracted_content IS NOT NULL THEN 'extracted'
                    ELSE cr.status
                END as effective_status
         FROM crawl_results cr
-        JOIN websites w ON cr.website_id = w.id
-        JOIN crawl_runs crun ON cr.crawl_run_id = crun.id
-        WHERE w.disabled = FALSE
+        JOIN sources s ON cr.source_id = s.id
+        JOIN crawl_jobs cj ON cr.crawl_job_id = cj.id
+        LEFT JOIN crawl_contents cnt ON cnt.crawl_result_id = cr.id
+        LEFT JOIN crawl_configs cc ON cc.source_id = s.id
+        WHERE s.disabled = FALSE
+          AND s.deleted_at IS NULL
           AND (
               cr.status IN ('crawled', 'extracted')
-              OR (cr.status = 'failed' AND cr.crawled_content IS NOT NULL)
+              OR (cr.status = 'failed' AND cnt.crawled_content IS NOT NULL)
           )
-        ORDER BY cr.status, crun.run_date DESC
+        ORDER BY cr.status, cj.started_at DESC
     """)
 
     results = []
@@ -323,12 +337,16 @@ def get_incomplete_crawl_results(cursor):
         results.append(
             {
                 "crawl_result_id": row[0],
-                "status": row[7],  # Use effective_status for processing
+                "status": row[7],  # effective_status
                 "original_status": row[1],
-                "website_id": row[2],
-                "crawl_run_id": row[3],
+                "source_id": row[2],
+                "crawl_job_id": row[3],
                 "name": row[4],
                 "notes": row[5],
+                "started_at": row[6],
+                # Backward-compatible aliases (callers updated in later phases)
+                "website_id": row[2],
+                "crawl_run_id": row[3],
                 "run_date": row[6],
             }
         )
@@ -339,17 +357,18 @@ def get_incomplete_crawl_results(cursor):
 def get_crawled_content(cursor, crawl_result_id):
     """Get crawled content for a crawl result."""
     cursor.execute(
-        "SELECT crawled_content FROM crawl_results WHERE id = %s", (crawl_result_id,)
+        "SELECT crawled_content FROM crawl_contents WHERE crawl_result_id = %s",
+        (crawl_result_id,),
     )
     result = cursor.fetchone()
     return result[0] if result else None
 
 
-def get_existing_upcoming_events(cursor, website_id):
+def get_existing_upcoming_events(cursor, source_id):
     """
-    Get existing upcoming events from a website for inclusion in extraction prompt.
+    Get existing upcoming events from a source for inclusion in extraction prompt.
 
-    Returns active (non-archived) events with occurrences from today onwards,
+    Returns active events with occurrences from today onwards,
     formatted as JSON-compatible dicts.
     """
     cursor.execute(
@@ -376,13 +395,15 @@ def get_existing_upcoming_events(cursor, website_id):
         LEFT JOIN event_urls eu ON e.id = eu.event_id
         LEFT JOIN event_tags et ON e.id = et.event_id
         LEFT JOIN tags t ON et.tag_id = t.id
-        WHERE e.website_id = %s
-          AND e.archived = FALSE
+        JOIN event_sources es ON es.event_id = e.id
+        WHERE es.source_id = %s
+          AND e.status = 'active'
+          AND e.deleted_at IS NULL
           AND eo.start_date >= CURRENT_DATE
         GROUP BY e.id, e.name, e.description, l.name, e.sublocation, e.emoji
         ORDER BY MIN(eo.start_date)
     """,
-        (website_id,),
+        (source_id,),
     )
 
     events = []
@@ -403,59 +424,45 @@ def get_existing_upcoming_events(cursor, website_id):
     return events
 
 
-def archive_outdated_events(cursor, connection, website_id):
+def archive_outdated_events(cursor, connection, source_id):
     """
-    Archive events that are no longer found in recent crawls from ANY of their source websites.
+    Archive events that are no longer found in recent crawls from ANY of their sources.
 
     An event is archived only if:
-    - For EVERY website that has ever referenced this event (via event_sources),
-      the most recent crawl from that website does NOT include this event
-    - At least one of those websites has been successfully crawled
-    - For events with future occurrences: a 14-day grace period applies — the event
-      is only archived if its most recent source crawl is older than 14 days.
-      This prevents premature archiving of events on rotating calendars that don't
-      always list events far in advance.
-
-    This ensures events referenced by multiple websites are only archived when
-    ALL sources stop listing them, not just one.
-
-    Logs a warning when upcoming events are archived (rare occurrence that may indicate
-    crawl failures or legitimate event changes).
+    - For EVERY source that has ever referenced this event (via event_sources),
+      the most recent crawl from that source does NOT include this event
+    - At least one of those sources has been successfully crawled
+    - For events with future occurrences: a 14-day grace period applies
 
     Args:
         cursor: Database cursor
         connection: Database connection
-        website_id: ID of the website that was just crawled (used to find related events)
+        source_id: ID of the source that was just crawled
 
     Returns:
         Number of events archived
     """
-    # Shared WHERE clause for identifying events to archive.
-    # An event qualifies when:
-    # 1. It has a source from the website we just crawled
-    # 2. No source website's latest crawl still references it
-    # 3. At least one source website has been successfully crawled
-    # 4. Either has no future dates, or last source crawl is 14+ days old (grace period)
     archive_where = """
-        e.archived = FALSE
+        e.status = 'active'
+          AND e.deleted_at IS NULL
           AND EXISTS (
               SELECT 1
               FROM event_sources es
-              JOIN crawl_events ce ON es.crawl_event_id = ce.id
-              JOIN crawl_results cr ON ce.crawl_result_id = cr.id
+              JOIN extracted_events ee ON es.extracted_event_id = ee.id
+              JOIN crawl_results cr ON ee.crawl_result_id = cr.id
               WHERE es.event_id = e.id
-                AND cr.website_id = %s
+                AND cr.source_id = %s
           )
           AND NOT EXISTS (
               SELECT 1
               FROM event_sources es
-              JOIN crawl_events ce ON es.crawl_event_id = ce.id
-              JOIN crawl_results cr ON ce.crawl_result_id = cr.id
+              JOIN extracted_events ee ON es.extracted_event_id = ee.id
+              JOIN crawl_results cr ON ee.crawl_result_id = cr.id
               WHERE es.event_id = e.id
                 AND cr.processed_at = (
                     SELECT MAX(cr2.processed_at)
                     FROM crawl_results cr2
-                    WHERE cr2.website_id = cr.website_id
+                    WHERE cr2.source_id = cr.source_id
                       AND cr2.status IN ('processed', 'extracted')
                       AND cr2.processed_at IS NOT NULL
                 )
@@ -463,33 +470,29 @@ def archive_outdated_events(cursor, connection, website_id):
           AND EXISTS (
               SELECT 1
               FROM event_sources es
-              JOIN crawl_events ce ON es.crawl_event_id = ce.id
-              JOIN crawl_results cr ON ce.crawl_result_id = cr.id
+              JOIN extracted_events ee ON es.extracted_event_id = ee.id
+              JOIN crawl_results cr ON ee.crawl_result_id = cr.id
               WHERE es.event_id = e.id
                 AND cr.status IN ('processed', 'extracted')
                 AND cr.processed_at IS NOT NULL
           )
           AND (
-              -- No future occurrences: archive immediately (past events)
               NOT EXISTS (
                   SELECT 1 FROM event_occurrences eo
                   WHERE eo.event_id = e.id AND eo.start_date >= CURRENT_DATE
               )
               OR
-              -- Has future occurrences: only archive after 14-day grace period
-              -- (handles rotating calendars that don't always list far-out events)
               NOT EXISTS (
                   SELECT 1
                   FROM event_sources es
-                  JOIN crawl_events ce ON es.crawl_event_id = ce.id
-                  JOIN crawl_results cr ON ce.crawl_result_id = cr.id
+                  JOIN extracted_events ee ON es.extracted_event_id = ee.id
+                  JOIN crawl_results cr ON ee.crawl_result_id = cr.id
                   WHERE es.event_id = e.id
                     AND cr.processed_at >= NOW() - INTERVAL '14 days'
               )
           )
     """
 
-    # First, identify events that will be archived to check for upcoming ones
     cursor.execute(
         f"""
         SELECT e.id, e.name,
@@ -500,7 +503,7 @@ def archive_outdated_events(cursor, connection, website_id):
         FROM events e
         WHERE {archive_where}
     """,
-        (website_id,),
+        (source_id,),
     )
 
     events_to_archive = cursor.fetchall()
@@ -510,14 +513,13 @@ def archive_outdated_events(cursor, connection, website_id):
         if next_occ
     ]
 
-    # Perform the actual archiving
     cursor.execute(
         f"""
         UPDATE events e
-        SET archived = TRUE
+        SET status = 'archived'
         WHERE {archive_where}
     """,
-        (website_id,),
+        (source_id,),
     )
 
     archived_count = cursor.rowcount
@@ -527,9 +529,12 @@ def archive_outdated_events(cursor, connection, website_id):
 
 
 def get_extracted_content(cursor, crawl_result_id):
-    """Get extracted content and website_id for a crawl result."""
+    """Get extracted content and source_id for a crawl result."""
     cursor.execute(
-        "SELECT extracted_content, website_id FROM crawl_results WHERE id = %s",
+        """SELECT cnt.extracted_content, cr.source_id
+           FROM crawl_results cr
+           LEFT JOIN crawl_contents cnt ON cnt.crawl_result_id = cr.id
+           WHERE cr.id = %s""",
         (crawl_result_id,),
     )
     result = cursor.fetchone()
@@ -540,15 +545,13 @@ def get_all_locations(cursor):
     """
     Get all locations with their alternate names for location matching.
 
-    Returns a list of dicts with: id, name, short_name, address, lat, lng, emoji, alternate_names, website_scoped_names
-    - alternate_names: list of global alternate names (no website_id)
-    - website_scoped_names: dict mapping website_id -> list of alternate names
+    Returns a list of dicts with: id, name, short_name, address, lat, lng, emoji, alternate_names
     """
-    # Get all locations
     cursor.execute("""
         SELECT id, name, short_name, address, lat, lng, emoji
         FROM locations
         WHERE lat IS NOT NULL AND lng IS NOT NULL
+          AND deleted_at IS NULL
     """)
 
     locations = {}
@@ -562,24 +565,17 @@ def get_all_locations(cursor):
             "lng": float(row[5]) if row[5] else None,
             "emoji": row[6],
             "alternate_names": [],
-            "website_scoped_names": {},
         }
 
-    # Get all alternate names (both global and website-scoped)
     cursor.execute("""
-        SELECT location_id, alternate_name, website_id
+        SELECT location_id, alternate_name
         FROM location_alternate_names
     """)
 
     for row in cursor.fetchall():
-        location_id, alternate_name, website_id = row
+        location_id, alternate_name = row
         if location_id in locations:
-            if website_id is None:
-                locations[location_id]["alternate_names"].append(alternate_name)
-            else:
-                locations[location_id]["website_scoped_names"].setdefault(
-                    website_id, []
-                ).append(alternate_name)
+            locations[location_id]["alternate_names"].append(alternate_name)
 
     return list(locations.values())
 
@@ -613,28 +609,29 @@ def get_tag_rules(cursor):
     return rules
 
 
-def get_websites_with_tags(cursor):
+def get_source_default_tags(cursor):
     """
-    Get all websites with their URLs and extra tags.
+    Get all sources with their URLs and default tags.
 
-    Returns a dict mapping URL (lowercase, no trailing slash) to list of extra tags.
+    Returns a dict mapping URL (lowercase, no trailing slash) to list of default tags.
+    Tags come from crawl_configs.default_tags (ARRAY column).
     """
     cursor.execute("""
-        SELECT wu.url, wt.tag
-        FROM website_urls wu
-        JOIN websites w ON wu.website_id = w.id
-        LEFT JOIN website_tags wt ON w.id = wt.website_id
-        WHERE w.disabled = FALSE
-        ORDER BY wu.website_id, wu.sort_order
+        SELECT su.url, cc.default_tags
+        FROM source_urls su
+        JOIN sources s ON su.source_id = s.id
+        JOIN crawl_configs cc ON cc.source_id = s.id
+        WHERE s.disabled = FALSE
+          AND s.deleted_at IS NULL
+          AND su.deleted_at IS NULL
+        ORDER BY su.source_id, su.sort_order
     """)
 
-    websites_map = {}
+    tags_map = {}
     for row in cursor.fetchall():
-        url, tag = row
+        url, default_tags = row
         normalized_url = url.rstrip("/").lower()
-        if normalized_url not in websites_map:
-            websites_map[normalized_url] = []
-        if tag:
-            websites_map[normalized_url].append(tag)
+        if normalized_url not in tags_map:
+            tags_map[normalized_url] = list(default_tags) if default_tags else []
 
-    return websites_map
+    return tags_map
