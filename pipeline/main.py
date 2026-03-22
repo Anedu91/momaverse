@@ -418,12 +418,12 @@ async def run_pipeline(website_ids=None, limit=None):
         # Mark crawl run as completed
         db.complete_crawl_run(cursor, connection, crawl_run_id)
 
-        # STEP 5: Merge crawl_events into final events table and archive outdated events
+        # STEP 5: Merge extracted_events into final events table and archive outdated events
         print(f"{'=' * 60}")
-        print("STEP 5: Merging Crawl Events and Archiving Outdated Events")
+        print("STEP 5: Merging Extracted Events and Archiving Outdated Events")
         print(f"{'=' * 60}")
 
-        new_events, merged_events = merger.merge_crawl_events(cursor, connection)
+        new_events, merged_events = merger.merge_extracted_events(cursor, connection)
         print(f"\n✓ Merged events ({new_events} new, {merged_events} merged)\n")
 
         # STEP 6: Export to JSON from events table

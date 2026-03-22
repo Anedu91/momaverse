@@ -8,10 +8,12 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from merger import (
+    _parse_jsonb,
     are_names_similar,
     extract_core_title,
     get_significant_words,
     is_false_positive,
+    merge_extracted_events,
     normalize_name_for_dedup,
     stem_word,
 )
@@ -278,6 +280,48 @@ class TestAreNamesSimilar(unittest.TestCase):
                 self.assertEqual(
                     are_names_similar(name1, name2), are_names_similar(name2, name1)
                 )
+
+
+class TestParseJsonb(unittest.TestCase):
+    """Tests for the _parse_jsonb helper."""
+
+    def test_none_returns_none(self):
+        self.assertIsNone(_parse_jsonb(None))
+
+    def test_dict_passthrough(self):
+        data = {"key": "value"}
+        self.assertEqual(_parse_jsonb(data), data)
+
+    def test_list_passthrough(self):
+        data = ["jazz", "live-music"]
+        self.assertEqual(_parse_jsonb(data), data)
+
+    def test_json_string_parsed(self):
+        self.assertEqual(_parse_jsonb('["a", "b"]'), ["a", "b"])
+
+    def test_invalid_json_string_returns_none(self):
+        self.assertIsNone(_parse_jsonb("not valid json {"))
+
+    def test_empty_string_returns_none(self):
+        self.assertIsNone(_parse_jsonb(""))
+
+    def test_numeric_returns_none(self):
+        self.assertIsNone(_parse_jsonb(42))
+
+
+class TestMergeExtractedEventsExists(unittest.TestCase):
+    """Verify the module exposes the renamed entry point."""
+
+    def test_old_name_removed(self):
+        import merger
+
+        self.assertFalse(
+            hasattr(merger, "merge_crawl_events"),
+            "merge_crawl_events should have been removed",
+        )
+
+    def test_new_name_callable(self):
+        self.assertTrue(callable(merge_extracted_events))
 
 
 if __name__ == "__main__":
