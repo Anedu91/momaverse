@@ -33,17 +33,17 @@ def _haversine_meters(lat1, lng1, lat2, lng2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
-def resolve_locations(raw_json_data, website_id, cursor, connection):
+def resolve_locations(raw_json_data, source_id, cursor, connection):
     """Resolve and auto-create missing venue locations from JSON API data.
 
     Extracts unique venues from the raw API response, checks for duplicates
     against existing locations (by normalized name and coordinate proximity),
-    and inserts new locations with website-scoped alternate names.
+    and inserts new locations with alternate names.
 
     Args:
         raw_json_data: Parsed JSON dict -- events keyed by event ID, each with
                        lugares > lugar_id > {nombre, direccion, zona, lat, lng}
-        website_id: Website ID for scoping alternate names
+        source_id: Source ID that triggered the resolve
         cursor: Database cursor
         connection: Database connection
 
@@ -104,12 +104,6 @@ def resolve_locations(raw_json_data, website_id, cursor, connection):
             normalized_alt = _normalize_location_name(alt_name)
             if normalized_alt:
                 existing_names.add(normalized_alt)
-        # And website-scoped alternate names
-        for ws_id, scoped_names in loc.get("website_scoped_names", {}).items():
-            for alt_name in scoped_names:
-                normalized_alt = _normalize_location_name(alt_name)
-                if normalized_alt:
-                    existing_names.add(normalized_alt)
 
     existing_coords = [
         (loc.get("lat"), loc.get("lng"))
@@ -170,11 +164,11 @@ def resolve_locations(raw_json_data, website_id, cursor, connection):
         )
         new_location_id = cursor.fetchone()[0]
 
-        # Insert website-scoped alternate name (original API name for processor matching)
+        # Insert alternate name (original API name for processor matching)
         cursor.execute(
-            """INSERT INTO location_alternate_names (location_id, alternate_name, website_id)
-               VALUES (%s, %s, %s)""",
-            (new_location_id, venue["nombre"], website_id),
+            """INSERT INTO location_alternate_names (location_id, alternate_name)
+               VALUES (%s, %s)""",
+            (new_location_id, venue["nombre"]),
         )
 
         # Update tracking sets for batch dedup

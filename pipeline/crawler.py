@@ -1,7 +1,7 @@
 """
 Web crawling module for the event processing pipeline.
 
-Uses Crawl4AI to crawl event websites and store content in the database.
+Uses Crawl4AI to crawl event sources and store content in the database.
 """
 
 import asyncio
@@ -83,7 +83,7 @@ def filter_by_date_window(events_dict, days_ahead=30):
                             try:
                                 dt = datetime.strptime(proxima, "%Y-%m-%d %H:%M")
                                 dates_found.append(dt)
-                            except ValueError, TypeError:
+                            except TypeError, ValueError:
                                 pass
 
         if not dates_found:
@@ -162,43 +162,42 @@ def flatten_events_to_markdown(events_dict, fields_include=None):
     return "\n".join(lines)
 
 
-async def crawl_json_api(website, cursor, connection, crawl_run_id):
-    """Crawl a website via HTTP GET to a JSON/JSONP API endpoint.
+async def crawl_json_api(source, cursor, connection, crawl_job_id):
+    """Crawl a source via HTTP GET to a JSON/JSONP API endpoint.
 
     Args:
-        website: Website dict with json_api_config, name, id, etc.
+        source: Source dict with json_api_config, name, id, etc.
         cursor: Database cursor
         connection: Database connection
-        crawl_run_id: ID of the current crawl run
+        crawl_job_id: ID of the current crawl job
 
     Returns:
         crawl_result_id if successful, None otherwise
     """
-    name = website["name"]
-    config = website.get("json_api_config", {})
+    name = source["name"]
+    config = source.get("json_api_config", {})
 
     if not config:
         print(f"  Skipping {name}: no json_api_config")
         return None, None
 
-    # Create safe filename and crawl result record
-    safe_filename = create_safe_filename(name, ".md")
+    # Create crawl result record
     crawl_result_id = db.create_crawl_result(
-        cursor, connection, crawl_run_id, website["id"], safe_filename
+        cursor, connection, crawl_job_id, source["id"]
     )
 
     try:
         # Determine URL
         url = config.get("base_url")
         if not url:
-            urls = website.get("urls", [])
+            urls = source.get("urls", [])
             if urls:
                 url = urls[0]["url"] if isinstance(urls[0], dict) else urls[0]
         if not url:
             db.update_crawl_result_failed(
                 cursor, connection, crawl_result_id, "No URL configured"
             )
-            db.update_website_last_crawled(cursor, connection, website["id"])
+            db.update_source_last_crawled(cursor, connection, source["id"])
             return None, None
 
         print(f"  Crawling {name} via JSON API...")
@@ -253,12 +252,12 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
             db.update_crawl_result_failed(
                 cursor, connection, crawl_result_id, "No events after filtering"
             )
-            db.update_website_last_crawled(cursor, connection, website["id"])
+            db.update_source_last_crawled(cursor, connection, source["id"])
             return None, None
 
         # Store markdown (same as browser crawl path)
         db.update_crawl_result_crawled(cursor, connection, crawl_result_id, markdown)
-        db.update_website_last_crawled(cursor, connection, website["id"])
+        db.update_source_last_crawled(cursor, connection, source["id"])
 
         print(
             f"    - Stored {len(markdown)} chars of markdown ({filtered_count} events)"
@@ -269,7 +268,7 @@ async def crawl_json_api(website, cursor, connection, crawl_run_id):
         error_msg = str(e)
         print(f"    - Error crawling {name}: {error_msg}")
         db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
-        db.update_website_last_crawled(cursor, connection, website["id"])
+        db.update_source_last_crawled(cursor, connection, source["id"])
         return None, None
 
 
@@ -280,7 +279,7 @@ def resolve_url_templates(url):
         {{month}}           - current month name, lowercase (e.g. "february")
         {{year}}            - current year (e.g. "2026")
         {{next_month}}      - next month name, lowercase
-        {{next_month_year}} - year of the next month (handles Dec→Jan rollover)
+        {{next_month_year}} - year of the next month (handles Dec->Jan rollover)
     """
     if "{{" not in url:
         return url
@@ -306,50 +305,47 @@ def create_safe_filename(name, extension=None):
     return safe
 
 
-async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
+async def crawl_source(crawler, source, cursor, connection, crawl_job_id):
     """
-    Crawl a website and store the content in the database.
+    Crawl a source and store the content in the database.
 
     Args:
         crawler: AsyncWebCrawler instance
-        website: Website dict with urls, name, selector, etc.
+        source: Source dict with urls, name, selector, etc.
         cursor: Database cursor
         connection: Database connection
-        crawl_run_id: ID of the current crawl run
+        crawl_job_id: ID of the current crawl job
 
     Returns:
         crawl_result_id if successful, None otherwise
     """
-    name = website["name"]
-    urls = website["urls"]
+    name = source["name"]
+    urls = source["urls"]
 
     if not urls:
         print(f"  Skipping {name}: no URLs configured")
         return None
 
-    # Create safe filename from website name
-    safe_filename = create_safe_filename(name, ".md")
-
     # Create crawl result record
     crawl_result_id = db.create_crawl_result(
-        cursor, connection, crawl_run_id, website["id"], safe_filename
+        cursor, connection, crawl_job_id, source["id"]
     )
 
     try:
         # Generate JavaScript code for dynamic content loading
         # Use custom js_code from database if set, otherwise generate from selector/num_clicks
-        js_code = website.get("js_code") or ""
+        js_code = source.get("js_code") or ""
         if not js_code:
-            selector = website.get("selector")
-            num_clicks = website.get("num_clicks", 2)
+            selector = source.get("selector")
+            num_clicks = source.get("num_clicks", 2)
             if selector and num_clicks:
                 js_code = f"for (let i = 0; i < {num_clicks}; i++) {{await new Promise(resolve => setTimeout(resolve, 1000)); document.querySelector('{selector}').click();}}"
 
         # Configure deep crawling strategy based on keywords
-        keywords = website.get("keywords")
+        keywords = source.get("keywords")
         if keywords:
             filters = [f"*{k.strip()}*" for k in keywords.split(", ")]
-            max_pages = website.get("max_pages", 30)
+            max_pages = source.get("max_pages", 30)
             url_filter = URLPatternFilter(patterns=filters)
             deep_crawl_strategy = BestFirstCrawlingStrategy(
                 max_depth=1,
@@ -360,13 +356,13 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
         else:
             deep_crawl_strategy = BestFirstCrawlingStrategy(max_depth=0)
 
-        # Get per-website crawl settings (with defaults)
-        delay_seconds = website.get("delay_before_return_html") or 5
-        filter_threshold = website.get("content_filter_threshold")
-        scan_full_page = website.get("scan_full_page", True)
-        remove_overlays = website.get("remove_overlay_elements", False)
-        scroll_delay = website.get("scroll_delay") or 0.2
-        crawl_timeout = website.get("crawl_timeout") or DEFAULT_CRAWL_TIMEOUT
+        # Get per-source crawl settings (with defaults)
+        delay_seconds = source.get("delay_before_return_html") or 5
+        filter_threshold = source.get("content_filter_threshold")
+        scan_full_page = source.get("scan_full_page", True)
+        remove_overlays = source.get("remove_overlay_elements", False)
+        scroll_delay = source.get("scroll_delay") or 0.2
+        crawl_timeout = source.get("crawl_timeout") or DEFAULT_CRAWL_TIMEOUT
 
         # Configure markdown generator with optional content filter
         # If filter_threshold is explicitly 0 or None, disable the filter entirely
@@ -420,7 +416,7 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
                     url = resolve_url_templates(url_data)
                     url_js_code = None
 
-                # Use per-URL js_code if set, otherwise use website-level config
+                # Use per-URL js_code if set, otherwise use source-level config
                 if url_js_code:
                     url_config = CrawlerRunConfig(
                         word_count_threshold=5,
@@ -507,13 +503,13 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
                 db.update_crawl_result_crawled(
                     cursor, connection, crawl_result_id, combined_markdown
                 )
-                db.update_website_last_crawled(cursor, connection, website["id"])
+                db.update_source_last_crawled(cursor, connection, source["id"])
                 return crawl_result_id
             # No content at all
             db.update_crawl_result_failed(
                 cursor, connection, crawl_result_id, error_msg
             )
-            db.update_website_last_crawled(cursor, connection, website["id"])
+            db.update_source_last_crawled(cursor, connection, source["id"])
             return None
 
         if not combined_markdown.strip():
@@ -521,7 +517,7 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
                 cursor, connection, crawl_result_id, "No content retrieved"
             )
             # Still update last_crawled_at to prevent immediate retry
-            db.update_website_last_crawled(cursor, connection, website["id"])
+            db.update_source_last_crawled(cursor, connection, source["id"])
             return None
 
         # Check for minimum content size to catch failed crawls early
@@ -533,14 +529,14 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
             db.update_crawl_result_failed(
                 cursor, connection, crawl_result_id, error_msg
             )
-            db.update_website_last_crawled(cursor, connection, website["id"])
+            db.update_source_last_crawled(cursor, connection, source["id"])
             return None
 
         # Store crawled content in database
         db.update_crawl_result_crawled(
             cursor, connection, crawl_result_id, combined_markdown
         )
-        db.update_website_last_crawled(cursor, connection, website["id"])
+        db.update_source_last_crawled(cursor, connection, source["id"])
 
         print(f"    - Stored {len(combined_markdown)} characters of content")
         return crawl_result_id
@@ -550,7 +546,7 @@ async def crawl_website(crawler, website, cursor, connection, crawl_run_id):
         print(f"    - Error crawling {name}: {error_msg}")
         db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
         # Still update last_crawled_at to prevent immediate retry
-        db.update_website_last_crawled(cursor, connection, website["id"])
+        db.update_source_last_crawled(cursor, connection, source["id"])
         return None
 
 
@@ -568,7 +564,7 @@ def get_browser_config(
         use_stealth: If True, uses undetected browser mode to bypass bot detection (default: False).
                     Required for sites like Resident Advisor that have verification pages.
 
-    Note: These are browser-level settings. All websites crawled with this
+    Note: These are browser-level settings. All sources crawled with this
           config will share the same settings.
     """
     if use_stealth:

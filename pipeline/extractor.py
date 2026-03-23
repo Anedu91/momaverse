@@ -713,7 +713,7 @@ async def extract_large_page(
     if total_batches_needed > max_batches:
         print(
             f"    - WARNING: {len(all_simple_events)} events would need {total_batches_needed} batches, capping at {max_batches} ({max_events} events). "
-            f"Set max_batches in websites table to override."
+            f"Set max_batches in crawl_configs table to override."
         )
         all_simple_events = all_simple_events[:max_events]
 
@@ -844,17 +844,17 @@ async def extract_events(
         db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
         return False
 
-    # Get website_id for this crawl result
+    # Get source_id for this crawl result
     cursor.execute(
-        "SELECT website_id FROM crawl_results WHERE id = %s", (crawl_result_id,)
+        "SELECT source_id FROM crawl_results WHERE id = %s", (crawl_result_id,)
     )
     result = cursor.fetchone()
-    website_id = result[0] if result else None
+    source_id = result[0] if result else None
 
-    # Get existing upcoming events from this website
+    # Get existing upcoming events from this source
     existing_events = []
-    if website_id:
-        existing_events = db.get_existing_upcoming_events(cursor, website_id)
+    if source_id:
+        existing_events = db.get_existing_upcoming_events(cursor, source_id)
         if existing_events:
             print(
                 f"    - Found {len(existing_events)} existing upcoming events to include in prompt"

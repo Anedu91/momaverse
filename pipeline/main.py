@@ -3,19 +3,17 @@ Event Processing Pipeline
 
 Orchestrates the complete event processing workflow:
 
-1. Crawl - Query websites table, crawl due sites, store in crawl_results
+1. Crawl - Query sources table, crawl due sites, store in crawl_results
 2. Extract - Use Gemini AI to extract structured event data
-3. Process - Parse responses, enrich with location data, store in crawl_events
-4. Merge - Deduplicate crawl_events into final events table
+3. Process - Parse responses, enrich with location data, store in extracted_events
+4. Merge - Deduplicate extracted_events into final events table
 5. Archive - Hide events no longer found in recent crawls
-6. Export - Generate JSON files from events table for website
-7. Upload - Push JSON files to FTP server
 
 Usage:
-    python main.py                     # Process all websites due for crawling
-    python main.py --ids 941           # Process specific website ID(s)
-    python main.py --ids 941,942,943   # Process multiple website IDs
-    python main.py --limit 5           # Only crawl first 5 websites due
+    python main.py                     # Process all sources due for crawling
+    python main.py --ids 941           # Process specific source ID(s)
+    python main.py --ids 941,942,943   # Process multiple source IDs
+    python main.py --limit 5           # Only crawl first 5 sources due
 """
 
 import argparse
@@ -25,9 +23,7 @@ from datetime import datetime
 
 import crawler
 import db
-import exporter
 import extractor
-import frequency_analyzer
 import location_resolver
 import merger
 import processor
@@ -35,18 +31,18 @@ import uploader
 from crawl4ai import AsyncWebCrawler
 
 
-async def run_pipeline(website_ids=None, limit=None):
+async def run_pipeline(source_ids=None, limit=None):
     """Execute the complete event processing pipeline.
 
     Args:
-        website_ids: Optional list of website IDs to process. If None, processes
-                     all websites due for crawling based on crawl_frequency.
-        limit: Optional maximum number of websites to crawl.
+        source_ids: Optional list of source IDs to process. If None, processes
+                    all sources due for crawling based on crawl_frequency.
+        limit: Optional maximum number of sources to crawl.
     """
     print(f"{'=' * 60}")
     print("EVENT PROCESSING PIPELINE")
-    if website_ids:
-        print(f"  Filtering to website IDs: {', '.join(map(str, website_ids))}")
+    if source_ids:
+        print(f"  Filtering to source IDs: {', '.join(map(str, source_ids))}")
     print(f"{'=' * 60}\n")
 
     # Connect to database
@@ -85,7 +81,7 @@ async def run_pipeline(website_ids=None, limit=None):
             )
             for r in results:
                 suffix = " [retry]" if r.get("original_status") == "failed" else ""
-                print(f"      {r['name']} (run: {r['run_date']}){suffix}")
+                print(f"      {r['name']} (job: {r['started_at']}){suffix}")
 
         if incomplete_results:
             print(f"Found {len(incomplete_results)} crawl result(s) to process:")
@@ -96,48 +92,46 @@ async def run_pipeline(website_ids=None, limit=None):
         else:
             print("No incomplete crawl results found.")
 
-        # STEP 1: Get websites due for crawling
+        # STEP 1: Get sources due for crawling
         print(f"\n{'=' * 60}")
-        print("STEP 1: Finding Websites Due for Crawling")
+        print("STEP 1: Finding Sources Due for Crawling")
         print(f"{'=' * 60}")
 
-        websites = db.get_websites_due_for_crawling(cursor, website_ids)
-        if limit and len(websites) > limit:
-            print(f"Found {len(websites)} website(s) due, limiting to {limit}")
-            websites = websites[:limit]
-        elif website_ids:
-            print(f"Found {len(websites)} website(s) matching specified IDs")
+        sources = db.get_sources_due_for_crawling(cursor, source_ids)
+        if limit and len(sources) > limit:
+            print(f"Found {len(sources)} source(s) due, limiting to {limit}")
+            sources = sources[:limit]
+        elif source_ids:
+            print(f"Found {len(sources)} source(s) matching specified IDs")
         else:
-            print(f"Found {len(websites)} website(s) due for crawling")
+            print(f"Found {len(sources)} source(s) due for crawling")
 
         # Check if there's any work to do
-        has_work = len(websites) > 0 or len(incomplete_results) > 0
+        has_work = len(sources) > 0 or len(incomplete_results) > 0
 
         if not has_work:
-            print("\nNo websites need crawling and no incomplete results to process.")
+            print("\nNo sources need crawling and no incomplete results to process.")
             print("Pipeline completed (no work to do).")
             return True
 
-        # Split websites by crawl mode
-        json_api_websites = [w for w in websites if w.get("crawl_mode") == "json_api"]
-        browser_websites = [
-            w for w in websites if w.get("crawl_mode", "browser") == "browser"
+        # Split sources by crawl mode
+        json_api_sources = [s for s in sources if s.get("crawl_mode") == "json_api"]
+        browser_sources = [
+            s for s in sources if s.get("crawl_mode", "browser") == "browser"
         ]
 
-        for w in websites:
-            mode = w.get("crawl_mode", "browser")
-            url_count = len(w.get("urls", []))
-            print(f"  - {w['name']} ({url_count} URL(s), mode={mode})")
+        for s in sources:
+            mode = s.get("crawl_mode", "browser")
+            url_count = len(s.get("urls", []))
+            print(f"  - {s['name']} ({url_count} URL(s), mode={mode})")
 
-        # Create crawl run
-        run_date = datetime.now().date()
-        run_date_str = run_date.strftime("%Y%m%d")
-        crawl_run_id = db.get_or_create_crawl_run(cursor, connection, run_date)
-        print(f"\nCrawl run ID: {crawl_run_id} ({run_date_str})")
+        # Create crawl job
+        crawl_job_id = db.create_crawl_job(cursor, connection)
+        print(f"\nCrawl job ID: {crawl_job_id}")
 
-        # STEP 2: Crawl websites
+        # STEP 2: Crawl sources
         print(f"\n{'=' * 60}")
-        print("STEP 2: Crawling Websites")
+        print("STEP 2: Crawling Sources")
         print(f"{'=' * 60}")
 
         # Number of concurrent workers for crawling and extraction
@@ -145,58 +139,58 @@ async def run_pipeline(website_ids=None, limit=None):
 
         crawl_results = []
 
-        # Crawl JSON API websites first (fast, no browser needed)
-        if json_api_websites:
-            print(f"\n  JSON API crawling ({len(json_api_websites)} site(s))...")
-            for website in json_api_websites:
+        # Crawl JSON API sources first (fast, no browser needed)
+        if json_api_sources:
+            print(f"\n  JSON API crawling ({len(json_api_sources)} site(s))...")
+            for source in json_api_sources:
                 conn = db.create_connection()
                 if not conn:
                     continue
                 cur = conn.cursor()
                 try:
                     result_id, raw_data = await crawler.crawl_json_api(
-                        website, cur, conn, crawl_run_id
+                        source, cur, conn, crawl_job_id
                     )
                     if result_id:
                         # Auto-create missing venues from structured API data
                         if raw_data and isinstance(raw_data, dict):
                             created = location_resolver.resolve_locations(
-                                raw_data, website["id"], cur, conn
+                                raw_data, source["id"], cur, conn
                             )
                             if created > 0:
                                 print(f"    - Auto-created {created} new location(s)")
-                        crawl_results.append((result_id, website))
+                        crawl_results.append((result_id, source))
                 except Exception as e:
-                    print(f"    - Error crawling {website['name']}: {e}")
+                    print(f"    - Error crawling {source['name']}: {e}")
                 finally:
                     cur.close()
                     conn.close()
 
-        # Group websites by browser settings (text_mode, light_mode, use_stealth)
-        # These are browser-level settings, so websites with different settings
+        # Group sources by browser settings (text_mode, light_mode, use_stealth)
+        # These are browser-level settings, so sources with different settings
         # need separate browser instances
-        def get_browser_key(w):
+        def get_browser_key(s):
             """Group key from browser-level settings (defaults: text=True, light=True, stealth=False)."""
             return (
-                w.get("text_mode") if w.get("text_mode") is not None else True,
-                w.get("light_mode") if w.get("light_mode") is not None else True,
-                w.get("use_stealth") if w.get("use_stealth") is not None else False,
+                s.get("text_mode") if s.get("text_mode") is not None else True,
+                s.get("light_mode") if s.get("light_mode") is not None else True,
+                s.get("use_stealth") if s.get("use_stealth") is not None else False,
             )
 
-        website_batches = {}
-        for website in browser_websites:
-            key = get_browser_key(website)
-            website_batches.setdefault(key, []).append(website)
+        source_batches = {}
+        for source in browser_sources:
+            key = get_browser_key(source)
+            source_batches.setdefault(key, []).append(source)
 
         for (
             text_mode,
             light_mode,
             use_stealth,
-        ), batch_websites in website_batches.items():
-            if len(website_batches) > 1:
+        ), batch_sources in source_batches.items():
+            if len(source_batches) > 1:
                 stealth_str = ", stealth=True" if use_stealth else ""
                 print(
-                    f"\n  Batch: text_mode={text_mode}, light_mode={light_mode}{stealth_str} ({len(batch_websites)} sites)"
+                    f"\n  Batch: text_mode={text_mode}, light_mode={light_mode}{stealth_str} ({len(batch_sources)} sites)"
                 )
 
             browser_config = crawler.get_browser_config(
@@ -207,16 +201,16 @@ async def run_pipeline(website_ids=None, limit=None):
                 # Worker pool pattern: maintain N concurrent crawlers at all times
                 queue = asyncio.Queue()
 
-                # Fill the queue with batch websites
-                for website in batch_websites:
-                    await queue.put(website)
+                # Fill the queue with batch sources
+                for source in batch_sources:
+                    await queue.put(source)
 
                 async def worker():
                     """Worker that continuously pulls from queue until empty."""
                     results = []
                     while True:
                         try:
-                            website = queue.get_nowait()
+                            source = queue.get_nowait()
                         except asyncio.QueueEmpty:
                             break
 
@@ -226,13 +220,13 @@ async def run_pipeline(website_ids=None, limit=None):
                             continue
                         cur = conn.cursor()
                         try:
-                            result_id = await crawler.crawl_website(
-                                web_crawler, website, cur, conn, crawl_run_id
+                            result_id = await crawler.crawl_source(
+                                web_crawler, source, cur, conn, crawl_job_id
                             )
                             if result_id:
-                                results.append((result_id, website))
+                                results.append((result_id, source))
                         except Exception as e:
-                            print(f"    - Error crawling {website['name']}: {e}")
+                            print(f"    - Error crawling {source['name']}: {e}")
                         finally:
                             cur.close()
                             conn.close()
@@ -248,7 +242,7 @@ async def run_pipeline(website_ids=None, limit=None):
                 for results in worker_results:
                     crawl_results.extend(results)
 
-        print(f"\n✓ Crawled {len(crawl_results)} website(s)\n")
+        print(f"\nCrawled {len(crawl_results)} source(s)\n")
 
         # STEP 3: Extract events using Gemini AI
         print(f"{'=' * 60}")
@@ -267,50 +261,50 @@ async def run_pipeline(website_ids=None, limit=None):
                     "crawl_result_id": r["crawl_result_id"],
                     "name": r["name"],
                     "notes": r.get("notes", ""),
-                    "run_date": r.get("run_date"),
+                    "started_at": r.get("started_at"),
                     "source": "incomplete",
                 }
             )
 
         # Add newly crawled results
-        for crawl_result_id, website in crawl_results:
+        for crawl_result_id, source in crawl_results:
             extraction_queue.append(
                 {
                     "crawl_result_id": crawl_result_id,
-                    "name": website["name"],
-                    "notes": website.get("notes", ""),
-                    "run_date": None,
+                    "name": source["name"],
+                    "notes": source.get("notes", ""),
+                    "started_at": None,
                     "source": "new",
-                    "website": website,
-                    "use_vision": website.get("process_images") == 1,
-                    "base_url": website.get("base_url", ""),
-                    "max_batches": website.get("max_batches"),
+                    "source_data": source,
+                    "use_vision": source.get("process_images") == 1,
+                    "base_url": source.get("base_url", ""),
+                    "max_batches": source.get("max_batches"),
                 }
             )
 
         if extraction_queue:
             print(
-                f"\n  Extracting events from {len(extraction_queue)} website(s) with {num_workers} workers..."
+                f"\n  Extracting events from {len(extraction_queue)} source(s) with {num_workers} workers..."
             )
 
             # Worker pool pattern: maintain N concurrent extractors at all times
-            extract_queue = asyncio.Queue()
+            extract_q = asyncio.Queue()
             for item in extraction_queue:
-                await extract_queue.put(item)
+                await extract_q.put(item)
 
             async def extract_worker():
                 """Worker that continuously pulls from queue until empty."""
                 results = []
                 while True:
                     try:
-                        item = extract_queue.get_nowait()
+                        item = extract_q.get_nowait()
                     except asyncio.QueueEmpty:
                         break
 
                     # Each worker gets its own connection to see latest committed data
                     conn = db.create_connection()
                     if not conn:
-                        extract_queue.task_done()
+                        extract_q.task_done()
                         continue
                     cur = conn.cursor()
                     try:
@@ -332,20 +326,20 @@ async def run_pipeline(website_ids=None, limit=None):
                                         {
                                             "name": item["name"],
                                             "notes": item["notes"],
-                                            "run_date": item["run_date"],
+                                            "started_at": item["started_at"],
                                         },
                                     )
                                 )
                             else:
                                 results.append(
-                                    (item["crawl_result_id"], item["website"])
+                                    (item["crawl_result_id"], item["source_data"])
                                 )
                     except Exception as e:
                         print(f"    - Error extracting {item['name']}: {e}")
                     finally:
                         cur.close()
                         conn.close()
-                        extract_queue.task_done()
+                        extract_q.task_done()
                 return results
 
             # Start N workers and wait for all to complete
@@ -357,7 +351,7 @@ async def run_pipeline(website_ids=None, limit=None):
             for results in worker_results:
                 extracted_results.extend(results)
 
-        print(f"\n✓ Extracted events from {len(extracted_results)} website(s)\n")
+        print(f"\nExtracted events from {len(extracted_results)} source(s)\n")
 
         # STEP 4: Process responses
         print(f"{'=' * 60}")
@@ -374,6 +368,7 @@ async def run_pipeline(website_ids=None, limit=None):
         cursor = connection.cursor()
 
         total_events = 0
+        run_date_str = datetime.now().strftime("%Y%m%d")
 
         # First, process incomplete 'extracted' results from previous runs
         if incomplete_extracted:
@@ -381,9 +376,8 @@ async def run_pipeline(website_ids=None, limit=None):
                 f"\n  Processing {len(incomplete_extracted)} incomplete 'extracted' result(s)..."
             )
             for r in incomplete_extracted:
-                print(f"  Processing {r['name']} (from {r['run_date']})...")
-                # Use the run date from the original crawl
-                original_run_date_str = r["run_date"].strftime("%Y%m%d")
+                print(f"  Processing {r['name']} (from {r['started_at']})...")
+                original_run_date_str = r["started_at"].strftime("%Y%m%d")
                 event_count = processor.process_events(
                     cursor,
                     connection,
@@ -395,70 +389,49 @@ async def run_pipeline(website_ids=None, limit=None):
                 print(f"    - {event_count} events processed")
 
         # Then process newly extracted results
-        for crawl_result_id, website in extracted_results:
-            print(f"  Processing {website['name']}...")
-            website_run_date = website.get("run_date")
+        for crawl_result_id, source in extracted_results:
+            print(f"  Processing {source['name']}...")
+            source_started_at = source.get("started_at")
             result_run_date_str = (
-                website_run_date.strftime("%Y%m%d")
-                if website_run_date
+                source_started_at.strftime("%Y%m%d")
+                if source_started_at
                 else run_date_str
             )
             event_count = processor.process_events(
                 cursor,
                 connection,
                 crawl_result_id,
-                website["name"],
+                source["name"],
                 result_run_date_str,
             )
             total_events += event_count
             print(f"    - {event_count} events processed")
 
-        print(f"\n✓ Processed {total_events} total events\n")
+        print(f"\nProcessed {total_events} total events\n")
 
-        # Mark crawl run as completed
-        db.complete_crawl_run(cursor, connection, crawl_run_id)
+        # Mark crawl job as completed
+        db.complete_crawl_job(cursor, connection, crawl_job_id)
 
-        # STEP 5: Merge crawl_events into final events table and archive outdated events
+        # STEP 5: Merge extracted_events into final events table and archive outdated events
         print(f"{'=' * 60}")
-        print("STEP 5: Merging Crawl Events and Archiving Outdated Events")
-        print(f"{'=' * 60}")
-
-        new_events, merged_events = merger.merge_crawl_events(cursor, connection)
-        print(f"\n✓ Merged events ({new_events} new, {merged_events} merged)\n")
-
-        # STEP 6: Export to JSON from events table
-        print(f"{'=' * 60}")
-        print("STEP 6: Exporting Events to JSON")
+        print("STEP 5: Merging Extracted Events and Archiving Outdated Events")
         print(f"{'=' * 60}")
 
-        print("  Exporting events from database to JSON...")
-        exporter.export_events(cursor)
+        new_events, merged_events = merger.merge_extracted_events(cursor, connection)
+        print(f"\nMerged events ({new_events} new, {merged_events} merged)\n")
 
-        print("\n✓ Event export completed\n")
-
-        # STEP 7: Upload data files
+        # STEP 6: Upload data files
         print(f"{'=' * 60}")
-        print("STEP 7: Uploading Data")
+        print("STEP 6: Uploading Data")
         print(f"{'=' * 60}")
 
         success = uploader.upload(use_tls=False)
 
         if success:
-            print("\n✓ Data upload completed\n")
+            print("\nData upload completed\n")
         else:
-            print("\n✗ Data upload failed\n")
+            print("\nData upload failed\n")
             return False
-
-        # STEP 8: Adjust crawl frequencies based on historical data
-        print(f"{'=' * 60}")
-        print("STEP 8: Adjusting Crawl Frequencies")
-        print(f"{'=' * 60}")
-
-        freq_results = frequency_analyzer.analyze_frequencies(cursor, connection)
-        if freq_results["adjusted"] > 0:
-            print(f"\n✓ Adjusted {freq_results['adjusted']} website frequency(s)\n")
-        else:
-            print("\nNo frequency adjustments needed\n")
 
         print(f"{'=' * 60}")
         print("PIPELINE COMPLETED SUCCESSFULLY")
@@ -466,7 +439,7 @@ async def run_pipeline(website_ids=None, limit=None):
 
         # Show summary
         print("Summary:")
-        print(f"  - Websites crawled: {len(crawl_results)}")
+        print(f"  - Sources crawled: {len(crawl_results)}")
         if incomplete_crawled:
             print(f"  - Resumed extractions: {len(incomplete_crawled)}")
         if incomplete_extracted:
@@ -497,20 +470,20 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  python main.py                     # Process all websites due for crawling
-  python main.py --ids 941           # Process specific website ID
-  python main.py --ids 941,942,943   # Process multiple website IDs
-  python main.py --limit 5           # Only crawl first 5 websites due
+  python main.py                     # Process all sources due for crawling
+  python main.py --ids 941           # Process specific source ID
+  python main.py --ids 941,942,943   # Process multiple source IDs
+  python main.py --limit 5           # Only crawl first 5 sources due
         """,
     )
     parser.add_argument(
         "--ids",
-        "--website-ids",
+        "--source-ids",
         type=str,
-        help="Comma-separated list of website IDs to process (ignores crawl_frequency)",
+        help="Comma-separated list of source IDs to process (ignores crawl_frequency)",
     )
     parser.add_argument(
-        "--limit", "-n", type=int, help="Maximum number of websites to crawl"
+        "--limit", "-n", type=int, help="Maximum number of sources to crawl"
     )
     return parser.parse_args()
 
@@ -518,9 +491,9 @@ Examples:
 if __name__ == "__main__":
     args = parse_args()
 
-    website_ids = None
+    source_ids = None
     if args.ids:
-        website_ids = [int(id.strip()) for id in args.ids.split(",")]
+        source_ids = [int(id.strip()) for id in args.ids.split(",")]
 
-    success = asyncio.run(run_pipeline(website_ids, args.limit))
+    success = asyncio.run(run_pipeline(source_ids, args.limit))
     sys.exit(0 if success else 1)

@@ -3,6 +3,7 @@ from api.models.base import (
     CrawlMode,
     CrawlResultStatus,
     EventStatus,
+    ExtractedEventStatus,
     LocationType,
     SoftDeleteMixin,
     SourceType,
@@ -13,6 +14,7 @@ from api.models.crawl import (
     CrawlJob,
     CrawlResult,
     ExtractedEvent,
+    ExtractedEventLog,
 )
 from api.models.event import Event, EventOccurrence, EventSource, EventTag, EventUrl
 from api.models.location import (
@@ -30,6 +32,7 @@ __all__ = [
     "CrawlMode",
     "CrawlResultStatus",
     "EventStatus",
+    "ExtractedEventStatus",
     "LocationType",
     "SourceType",
     "TagRuleType",
@@ -46,6 +49,7 @@ __all__ = [
     "EventTag",
     "EventUrl",
     "ExtractedEvent",
+    "ExtractedEventLog",
     "Location",
     "LocationAlternateName",
     "LocationTag",

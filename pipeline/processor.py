@@ -657,17 +657,15 @@ def build_locations_map(cursor):
 
     Returns a dict with:
     - 'names': main location names -> info (for unique) or list (for ambiguous)
-    - 'alternate_names': global alternate names (not website-scoped)
+    - 'alternate_names': global alternate names
     - 'short_names': short names
     - 'addresses': street addresses (number + street name portion)
-    - 'website_scoped': dict mapping website_id -> {normalized_name -> info}
     """
     locations_map = {
         "names": {},
         "alternate_names": {},
         "short_names": {},
         "addresses": {},
-        "website_scoped": {},
     }
 
     locations_data = db.get_all_locations(cursor)
@@ -721,21 +719,6 @@ def build_locations_map(cursor):
             if normalized_short and len(normalized_short) >= 3:
                 locations_map["short_names"][normalized_short] = full_info
 
-        # Website-scoped alternate names
-        for website_id, scoped_names in loc.get("website_scoped_names", {}).items():
-            if website_id not in locations_map["website_scoped"]:
-                locations_map["website_scoped"][website_id] = {}
-            for alt_name in scoped_names:
-                if alt_name and len(alt_name) >= 3:
-                    locations_map["website_scoped"][website_id][alt_name.lower()] = (
-                        full_info
-                    )
-                    normalized_alt = _normalize_location_name(alt_name)
-                    if normalized_alt and len(normalized_alt) >= 3:
-                        locations_map["website_scoped"][website_id][normalized_alt] = (
-                            full_info
-                        )
-
         # Index by street address (e.g., "347 davis ave" from "347 Davis Ave, Staten Island, NY")
         address = loc.get("address", "")
         street_address = _extract_street_address(address)
@@ -745,9 +728,9 @@ def build_locations_map(cursor):
     return locations_map
 
 
-def build_websites_map(cursor):
+def build_sources_map(cursor):
     """Builds a map for URL-to-extra_tags mapping from the database."""
-    return db.get_websites_with_tags(cursor)
+    return db.get_source_default_tags(cursor)
 
 
 def get_location_id(
@@ -756,7 +739,6 @@ def get_location_id(
     source_site_name,
     event_name_raw,
     locations_map,
-    website_id=None,
 ):
     """Finds the best matching location ID for an event.
 
@@ -766,7 +748,6 @@ def get_location_id(
         source_site_name: The source website name
         event_name_raw: The event name
         locations_map: The locations map from build_locations_map()
-        website_id: Optional website ID for website-scoped alternate name matching
 
     Returns:
         Dict with id, emoji keys, or None if no match found.
@@ -799,28 +780,21 @@ def get_location_id(
         """Get first item if list, otherwise return as-is."""
         return match[0] if isinstance(match, list) else match
 
-    # Step 1: Website-scoped alternate names (highest priority, most specific)
-    if website_id and website_id in locations_map.get("website_scoped", {}):
-        website_tier = locations_map["website_scoped"][website_id]
-        for key in search_keys:
-            if key in website_tier:
-                return make_result(website_tier[key])
-
-    # Step 2: Exact matches in global tiers (names, alternate_names, short_names)
+    # Step 1: Exact matches in global tiers (names, alternate_names, short_names)
     for tier_name in ["names", "alternate_names", "short_names"]:
         tier = locations_map.get(tier_name, {})
         for key in search_keys:
             if key in tier:
                 return make_result(get_first(tier[key]))
 
-    # Step 3: Address matching (e.g., "347 Davis Ave" matches location at that address)
+    # Step 2: Address matching (e.g., "347 Davis Ave" matches location at that address)
     addresses_tier = locations_map.get("addresses", {})
     for key in search_keys:
         normalized_addr = _normalize_street_address(key)
         if normalized_addr and normalized_addr in addresses_tier:
             return make_result(addresses_tier[normalized_addr])
 
-    # Step 4: Prefix matching (e.g., "Devocíon" matches "Devocíon (Williamsburg)")
+    # Step 3: Prefix matching (e.g., "Devocíon" matches "Devocíon (Williamsburg)")
     # Only use location_keys here to avoid matching event names to unrelated locations
     for key in location_keys:
         if len(key) >= 5:
@@ -828,14 +802,12 @@ def get_location_id(
                 if loc_key.startswith(key + " ") or loc_key.startswith(key + "("):
                     return make_result(get_first(match))
 
-    # Step 5: Fuzzy matching across all tiers
+    # Step 4: Fuzzy matching across all tiers
     all_tiers = [
         (0, locations_map.get("names", {})),
         (1, locations_map.get("alternate_names", {})),
         (2, locations_map.get("short_names", {})),
     ]
-    if website_id and website_id in locations_map.get("website_scoped", {}):
-        all_tiers.insert(0, (-1, locations_map["website_scoped"][website_id]))
 
     best_result, best_score, best_priority = None, -1, 999
 
@@ -886,7 +858,7 @@ def get_location_id(
     if best_result:
         return make_result(best_result)
 
-    # Step 6: Source site fallback (match website name to location)
+    # Step 5: Source site fallback (match website name to location)
     normalized_site = _normalize_location_name(source_site_name)
     best_score, best_result = -1, None
 
@@ -1024,14 +996,14 @@ def _parse_markdown_table(extracted_content):
 
 def process_events(cursor, connection, crawl_result_id, website_name, run_date_str):
     """
-    Process extracted events and store in crawl_events table.
+    Process extracted events and store in extracted_events table.
 
     Supports both JSON (structured output) and legacy markdown table formats.
 
     Returns:
         Number of events processed
     """
-    extracted_content, website_id = db.get_extracted_content(cursor, crawl_result_id)
+    extracted_content, source_id = db.get_extracted_content(cursor, crawl_result_id)
     if not extracted_content:
         print("    - No extracted content found")
         return 0
@@ -1042,7 +1014,7 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
     )
 
     locations_map = build_locations_map(cursor)
-    websites_map = build_websites_map(cursor)
+    sources_map = build_sources_map(cursor)
 
     safe_filename = create_safe_filename(website_name)
 
@@ -1053,7 +1025,7 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
         parsed_rows = _parse_markdown_table(extracted_content)
 
     if not parsed_rows:
-        db.update_crawl_result_processed(cursor, connection, crawl_result_id, 0)
+        db.update_crawl_result_processed(cursor, connection, crawl_result_id)
         return 0
 
     current_date = datetime.now().date()
@@ -1080,8 +1052,8 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
 
         # Get extra_tags
         extra_tags_list = []
-        if source_url and websites_map:
-            extra_tags_list = websites_map.get(source_url.rstrip("/").lower(), [])
+        if source_url and sources_map:
+            extra_tags_list = sources_map.get(source_url.rstrip("/").lower(), [])
 
         processed_row = process_tags(row_dict, tag_rules, extra_tags=extra_tags_list)
 
@@ -1103,11 +1075,41 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
             safe_filename.replace("_", " ").lower(),
             processed_row.get("name", "").strip(),
             locations_map,
-            website_id=website_id,
         )
 
         if location_info:
             processed_row["location_id"] = location_info.get("id")
+        else:
+            # Create new location for unmatched names
+            location_name = processed_row.get("location", "").strip()
+            if location_name:
+                cursor.execute(
+                    "INSERT INTO locations (name) VALUES (%s) RETURNING id",
+                    (location_name[:255],),
+                )
+                new_location_id = cursor.fetchone()[0]
+                processed_row["location_id"] = new_location_id
+
+                # Add alternate name for future matching
+                cursor.execute(
+                    """INSERT INTO location_alternate_names (location_id, alternate_name)
+                       VALUES (%s, %s)""",
+                    (new_location_id, location_name[:255]),
+                )
+
+                # Add to locations_map so subsequent events at same venue match
+                new_info = {
+                    "id": new_location_id,
+                    "name": location_name,
+                    "address": None,
+                    "lat": None,
+                    "lng": None,
+                    "emoji": None,
+                }
+                locations_map["names"][location_name.lower()] = new_info
+                normalized = _normalize_location_name(location_name)
+                if normalized and len(normalized) >= 3:
+                    locations_map["names"][normalized] = new_info
 
         # Process emoji
         first_emoji = find_first_emoji(processed_row.get("emoji", ""))
@@ -1130,12 +1132,29 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
         if not event_data.get("name"):
             continue
 
+        # Build occurrences as JSONB list of dicts
+        occurrences_list = []
+        for occ in event_data.get("occurrences", []):
+            if len(occ) >= 1 and occ[0]:
+                occurrences_list.append(
+                    {
+                        "start_date": occ[0],
+                        "start_time": occ[1] if len(occ) > 1 else None,
+                        "end_date": occ[2] if len(occ) > 2 and occ[2] else None,
+                        "end_time": occ[3] if len(occ) > 3 else None,
+                    }
+                )
+
+        # Build tags as JSONB list of strings
+        tags_list = [tag for tag in event_data.get("tags", []) if tag]
+
+        # Single INSERT into extracted_events with JSONB columns
         cursor.execute(
-            """INSERT INTO crawl_events
+            """INSERT INTO extracted_events
                (crawl_result_id, name, short_name, description, emoji,
-                location_name, sublocation, location_id, url, raw_data)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               RETURNING id""",
+                location_name, sublocation, location_id, url,
+                occurrences, tags)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 crawl_result_id,
                 event_data.get("name", "")[:500],
@@ -1154,42 +1173,14 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                 (event_data.get("urls", [None])[0])[:2000]
                 if event_data.get("urls")
                 else None,
-                json.dumps(event_data),
+                json.dumps(occurrences_list),
+                json.dumps(tags_list),
             ),
         )
-        crawl_event_id = cursor.fetchone()[0]
-
-        # Insert occurrences
-        for i, occ in enumerate(event_data.get("occurrences", [])):
-            if len(occ) >= 1 and occ[0]:
-                try:
-                    cursor.execute(
-                        """INSERT INTO crawl_event_occurrences
-                           (crawl_event_id, start_date, start_time, end_date, end_time, sort_order)
-                           VALUES (%s, %s, %s, %s, %s, %s)""",
-                        (
-                            crawl_event_id,
-                            occ[0],
-                            occ[1] if len(occ) > 1 else None,
-                            occ[2] if len(occ) > 2 and occ[2] else None,
-                            occ[3] if len(occ) > 3 else None,
-                            i,
-                        ),
-                    )
-                except Exception:
-                    pass
-
-        # Insert tags
-        for tag in event_data.get("tags", []):
-            if tag:
-                cursor.execute(
-                    "INSERT INTO crawl_event_tags (crawl_event_id, tag) VALUES (%s, %s)",
-                    (crawl_event_id, tag[:100]),
-                )
 
         event_count += 1
 
     connection.commit()
-    db.update_crawl_result_processed(cursor, connection, crawl_result_id, event_count)
+    db.update_crawl_result_processed(cursor, connection, crawl_result_id)
 
     return event_count

@@ -1,31 +1,22 @@
 """
 Event deduplication and merging module.
 
-Merges crawl_events into the final events table with deduplication.
+Merges extracted_events into the final events table with deduplication.
 Archives outdated events that are no longer found in recent crawls.
-Logs all changes to the edits table for sync tracking.
+Logs outcomes to extracted_event_logs for audit tracking.
 """
 
+import json
 import re
-import sys
 import unicodedata
 from datetime import datetime, timedelta
-from pathlib import Path
 
 import db
-
-# Add database module to path for edit logger
-sys.path.insert(0, str(Path(__file__).parent.parent / "database"))
-
-try:
-    from edit_logger import EditLogger
-except ImportError:
-    EditLogger = None
 
 
 def normalize_name_for_dedup(name):
     """Remove accents, punctuation, underscores, and whitespace; convert to lowercase."""
-    # Normalize unicode to remove accents (é -> e, etc.)
+    # Normalize unicode to remove accents (e -> e, etc.)
     nfkd = unicodedata.normalize("NFKD", name)
     ascii_name = "".join(c for c in nfkd if not unicodedata.combining(c))
 
@@ -370,26 +361,49 @@ def are_names_similar(name1, name2):
     return False
 
 
-def merge_crawl_events(cursor, connection, crawl_run_id=None):
+def _parse_jsonb(value):
+    """Parse a JSONB value that may be a string, dict/list, or None."""
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except TypeError, ValueError:
+            return None
+    return None
+
+
+def _log_extracted_event(cursor, ee_id, status, event_id=None, message=None):
+    """Insert a log entry into extracted_event_logs."""
+    cursor.execute(
+        """INSERT INTO extracted_event_logs (extracted_event_id, status, event_id, message)
+           VALUES (%s, %s, %s, %s)""",
+        (ee_id, status, event_id, message),
+    )
+
+
+def merge_extracted_events(cursor, connection, crawl_job_id=None):
     """
-    Merge new crawl_events into the final events table with deduplication.
+    Merge new extracted_events into the final events table with deduplication.
     Archives outdated events that are no longer found in recent crawls.
 
     Deduplication logic:
     - Events are considered duplicates if they share the same lat/lng, similar name,
       and have an overlapping occurrence date.
     - For duplicates, we merge URLs and keep the shorter name / longer description.
-    - Links to crawl_events are tracked in event_sources table.
+    - Links to extracted_events are tracked in event_sources table.
 
     Archiving logic:
-    - After merging, archives events from processed websites where ALL source websites
+    - After merging, archives events from processed sources where ALL source sources
       have newer crawls that don't include the event.
     - Multi-source events are only archived when ALL sources stop listing them.
 
     Args:
         cursor: Database cursor
         connection: Database connection
-        crawl_run_id: Optional crawl run ID for edit logging context
+        crawl_job_id: Optional crawl job ID for context
 
     Returns:
         Tuple of (new_events_count, merged_count)
@@ -397,58 +411,49 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
     current_date = datetime.now().date()
     future_limit_date = (datetime.now() + timedelta(days=90)).date()
 
-    # Initialize edit logger if available
-    edit_logger = None
-    if EditLogger:
-        edit_logger = EditLogger(
-            cursor,
-            connection,
-            source="crawl",
-            editor_info=f"crawl_run:{crawl_run_id}" if crawl_run_id else "crawl",
-        )
-
-    # Get crawl_events that haven't been linked to any final event yet
+    # Get extracted_events that haven't been linked to any final event yet
     cursor.execute("""
-        SELECT ce.id, ce.name, ce.short_name, ce.description, ce.emoji,
-               ce.location_name, ce.sublocation, ce.location_id, ce.url,
-               cr.website_id, l.lat, l.lng
-        FROM crawl_events ce
-        JOIN crawl_results cr ON ce.crawl_result_id = cr.id
-        LEFT JOIN event_sources es ON ce.id = es.crawl_event_id
-        LEFT JOIN locations l ON ce.location_id = l.id
+        SELECT ee.id, ee.name, ee.short_name, ee.description, ee.emoji,
+               ee.sublocation, ee.location_id, ee.url,
+               cr.source_id, l.lat, l.lng,
+               ee.occurrences, ee.tags
+        FROM extracted_events ee
+        JOIN crawl_results cr ON ee.crawl_result_id = cr.id
+        LEFT JOIN event_sources es ON ee.id = es.extracted_event_id
+        LEFT JOIN locations l ON ee.location_id = l.id
         WHERE cr.status = 'processed'
           AND es.id IS NULL
     """)
 
-    new_crawl_events = cursor.fetchall()
-    print(f"  Found {len(new_crawl_events)} unprocessed crawl_events")
+    new_extracted_events = cursor.fetchall()
+    print(f"  Found {len(new_extracted_events)} unprocessed extracted_events")
 
-    if not new_crawl_events:
+    if not new_extracted_events:
         return 0, 0
 
     # Build lookups of existing events for deduplication:
     # 1. By location_id for events with matched locations
-    # 2. By normalized location_name for events without location_id (fallback)
     # Only load events that have at least one recent/future occurrence (optimization for large datasets)
     # Use 10-day buffer to catch recurring events that may not have next occurrence posted yet
     recent_cutoff = (datetime.now() - timedelta(days=10)).date()
     cursor.execute(
         """
-        SELECT DISTINCT e.id, e.name, e.location_id, l.lat, l.lng, e.location_name, e.website_id
+        SELECT DISTINCT e.id, e.name, e.location_id, l.lat, l.lng
         FROM events e
         JOIN event_occurrences eo ON e.id = eo.event_id
         LEFT JOIN locations l ON e.location_id = l.id
-        WHERE eo.start_date >= %s
+        WHERE e.status = 'active'
+          AND e.deleted_at IS NULL
+          AND eo.start_date >= %s
     """,
         (recent_cutoff,),
     )
     existing_events_by_coords = {}  # key: (lat, lng) -> list of {id, name}
     existing_events_by_location_id = {}  # key: location_id -> list of {id, name}
-    existing_events_by_location = {}  # key: normalized location_name -> list of {id, name}
-    existing_events_by_website = {}  # key: website_id -> list of {id, name}
+    existing_events_by_source = {}  # key: source_id -> list of {id, name}
     event_ids_with_future = set()
     for row in cursor.fetchall():
-        event_id, name, location_id, lat, lng, location_name, website_id = row
+        event_id, name, location_id, lat, lng = row
         event_ids_with_future.add(event_id)
         event_entry = {"id": event_id, "name": name}
 
@@ -465,19 +470,34 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                 existing_events_by_coords[key] = []
             existing_events_by_coords[key].append(event_entry)
 
-        # Also index by normalized location_name (for fallback matching)
-        if location_name:
-            loc_key = normalize_name_for_dedup(location_name)
-            if loc_key and len(loc_key) >= 3:
-                if loc_key not in existing_events_by_location:
-                    existing_events_by_location[loc_key] = []
-                existing_events_by_location[loc_key].append(event_entry)
+    # Build source_id index from event_sources
+    if event_ids_with_future:
+        placeholders = ",".join(["%s"] * len(event_ids_with_future))
+        cursor.execute(
+            f"""
+            SELECT DISTINCT es.event_id, es.source_id
+            FROM event_sources es
+            WHERE es.event_id IN ({placeholders})
+              AND es.source_id IS NOT NULL
+        """,
+            tuple(event_ids_with_future),
+        )
+        # We need event names for the source index; build a quick id->name map
+        event_name_map = {}
+        for loc_events in existing_events_by_location_id.values():
+            for entry in loc_events:
+                event_name_map[entry["id"]] = entry["name"]
+        for coord_events in existing_events_by_coords.values():
+            for entry in coord_events:
+                event_name_map[entry["id"]] = entry["name"]
 
-        # Index by website_id (last-resort fallback for location mismatches)
-        if website_id is not None:
-            if website_id not in existing_events_by_website:
-                existing_events_by_website[website_id] = []
-            existing_events_by_website[website_id].append(event_entry)
+        for event_id, source_id in cursor.fetchall():
+            if event_id in event_ids_with_future and event_id in event_name_map:
+                if source_id not in existing_events_by_source:
+                    existing_events_by_source[source_id] = []
+                existing_events_by_source[source_id].append(
+                    {"id": event_id, "name": event_name_map[event_id]}
+                )
 
     print(
         f"  Loaded {len(event_ids_with_future)} existing events with future occurrences"
@@ -486,7 +506,6 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
     # Load future occurrence dates for these events (only dates we care about for dedup)
     event_dates = {eid: set() for eid in event_ids_with_future}
     if event_ids_with_future:
-        # Use a placeholder approach for large IN clauses
         placeholders = ",".join(["%s"] * len(event_ids_with_future))
         cursor.execute(
             f"""
@@ -503,56 +522,97 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
     new_events_count = 0
     merged_count = 0
 
-    for ce_row in new_crawl_events:
+    for ee_row in new_extracted_events:
         (
-            ce_id,
+            ee_id,
             name,
             short_name,
             description,
             emoji,
-            location_name,
             sublocation,
             location_id,
             url,
-            website_id,
+            source_id,
             lat,
             lng,
-        ) = ce_row
+            raw_occurrences,
+            raw_tags,
+        ) = ee_row
 
         if not name:
             continue
 
-        # Get occurrences for this crawl event
-        cursor.execute(
-            """
-            SELECT start_date, start_time, end_date, end_time, sort_order
-            FROM crawl_event_occurrences
-            WHERE crawl_event_id = %s
-            ORDER BY start_date, sort_order
-        """,
-            (ce_id,),
-        )
-        occurrences = cursor.fetchall()
+        # source_id is a system invariant -- must always be present
+        if source_id is None:
+            raise RuntimeError(
+                f"extracted_event {ee_id} has no source_id via crawl_results; "
+                "this violates a system invariant"
+            )
+
+        # Pre-flight: location_id is required for events
+        if location_id is None:
+            _log_extracted_event(
+                cursor,
+                ee_id,
+                "skipped_no_location",
+                message="No location_id on extracted event",
+            )
+            connection.commit()
+            continue
+
+        # Parse occurrences from JSONB
+        occurrences_list = _parse_jsonb(raw_occurrences) or []
 
         # Filter occurrences by date range
         valid_occurrences = []
-        for occ in occurrences:
-            start_date = occ[0]
-            if start_date and current_date <= start_date <= future_limit_date:
-                valid_occurrences.append(occ)
+        for occ in occurrences_list:
+            try:
+                start_date_str = (
+                    occ.get("start_date") if isinstance(occ, dict) else None
+                )
+                if not start_date_str:
+                    continue
+                start_date = datetime.strptime(str(start_date_str), "%Y-%m-%d").date()
+                if current_date <= start_date <= future_limit_date:
+                    valid_occurrences.append(
+                        {
+                            "start_date": start_date,
+                            "start_time": occ.get("start_time"),
+                            "end_date": None,
+                            "end_time": occ.get("end_time"),
+                        }
+                    )
+                    # Parse end_date if present
+                    end_date_str = occ.get("end_date")
+                    if end_date_str:
+                        try:
+                            valid_occurrences[-1]["end_date"] = datetime.strptime(
+                                str(end_date_str), "%Y-%m-%d"
+                            ).date()
+                        except TypeError, ValueError:
+                            pass
+            except TypeError, ValueError:
+                continue
 
         if not valid_occurrences:
-            # No valid future occurrences, skip
+            _log_extracted_event(
+                cursor,
+                ee_id,
+                "skipped_no_occurrences",
+                message="No valid future occurrences",
+            )
+            connection.commit()
             continue
 
-        # Build set of occurrence dates for this crawl event
-        crawl_event_dates = set(str(occ[0]) for occ in valid_occurrences if occ[0])
+        # Parse tags from JSONB
+        tags = _parse_jsonb(raw_tags) or []
+        if not isinstance(tags, list):
+            tags = []
 
-        # Get tags for this crawl event
-        cursor.execute(
-            "SELECT tag FROM crawl_event_tags WHERE crawl_event_id = %s", (ce_id,)
+        # Build set of occurrence dates for this extracted event
+        extracted_event_dates = set(
+            str(occ["start_date"]) for occ in valid_occurrences if occ["start_date"]
         )
-        tags = [row[0] for row in cursor.fetchall()]
 
         # Check for duplicate in existing events (same location + overlapping dates + similar name)
         matched_event_id = None
@@ -563,12 +623,12 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
             best_id = None
             for existing in candidates:
                 existing_dates = event_dates.get(existing["id"], set())
-                if crawl_event_dates & existing_dates:  # date overlap required
+                if extracted_event_dates & existing_dates:  # date overlap required
                     if are_names_similar(name, existing["name"]):
                         if normalize_name_for_dedup(existing["name"]) == norm_name:
-                            return existing["id"]  # Exact match — best possible
+                            return existing["id"]  # Exact match -- best possible
                         elif best_id is None:
-                            best_id = existing["id"]  # Partial match — keep looking
+                            best_id = existing["id"]  # Partial match -- keep looking
             return best_id
 
         # Try matching by location_id first (most precise and reliable)
@@ -583,25 +643,19 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
             if key in existing_events_by_coords:
                 matched_event_id = find_best_match(existing_events_by_coords[key])
 
-        # Second fallback: match by location_name if still no match found
-        if matched_event_id is None and location_name:
-            loc_key = normalize_name_for_dedup(location_name)
-            if loc_key and len(loc_key) >= 3 and loc_key in existing_events_by_location:
-                matched_event_id = find_best_match(existing_events_by_location[loc_key])
-
-        # Last-resort fallback: match by website_id when location strategies all failed.
+        # Last-resort fallback: match by source_id when location strategies all failed.
         # Catches cases where AI extraction assigns inconsistent location names between
         # crawls (e.g., "Online (via Zoom)" vs "Online", "Various NYC Venues" vs
         # "New York City Venues"). Safe because name similarity + date overlap + same
-        # website is a strong enough signal.
-        if matched_event_id is None and website_id in existing_events_by_website:
-            matched_event_id = find_best_match(existing_events_by_website[website_id])
+        # source is a strong enough signal.
+        if matched_event_id is None and source_id in existing_events_by_source:
+            matched_event_id = find_best_match(existing_events_by_source[source_id])
 
         if matched_event_id:
             # Merge with existing event
             # Un-archive event if it was previously archived (event found in new crawl)
             cursor.execute(
-                "UPDATE events SET archived = FALSE WHERE id = %s AND archived = TRUE",
+                "UPDATE events SET status = 'active' WHERE id = %s AND status = 'archived' AND deleted_at IS NULL",
                 (matched_event_id,),
             )
 
@@ -614,7 +668,7 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                 )
                 if not cursor.fetchone():
                     cursor.execute(
-                        "INSERT INTO event_urls (event_id, url, sort_order) VALUES (%s, %s, 99)",
+                        "INSERT INTO event_urls (event_id, url) VALUES (%s, %s)",
                         (matched_event_id, url[:2000]),
                     )
 
@@ -631,20 +685,29 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                         (location_id, matched_event_id),
                     )
 
-            # Link crawl_event to existing event
+            # Link extracted_event to existing event
             cursor.execute(
-                "INSERT INTO event_sources (event_id, crawl_event_id, is_primary) VALUES (%s, %s, FALSE)",
-                (matched_event_id, ce_id),
+                "INSERT INTO event_sources (event_id, extracted_event_id, source_id, is_primary) VALUES (%s, %s, %s, FALSE)",
+                (matched_event_id, ee_id, source_id),
             )
+
+            _log_extracted_event(
+                cursor,
+                ee_id,
+                "merged",
+                event_id=matched_event_id,
+                message=f"Merged with existing event {matched_event_id}",
+            )
+            connection.commit()
             merged_count += 1
 
         else:
             # Create new event
             cursor.execute(
                 """
-                INSERT INTO events (name, short_name, description, emoji, location_id, location_name,
-                                   sublocation, website_id)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO events (name, short_name, description, emoji, location_id,
+                                   sublocation)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING id
             """,
                 (
@@ -653,51 +716,38 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                     description,
                     emoji[:10] if emoji else None,
                     location_id,
-                    location_name[:255] if location_name else None,
                     sublocation[:255] if sublocation else None,
-                    website_id,
                 ),
             )
             new_event_id = cursor.fetchone()[0]
-
-            # Log the insert for sync tracking
-            if edit_logger:
-                edit_logger.log_insert(
-                    "events",
-                    new_event_id,
-                    {
-                        "name": name[:500],
-                        "short_name": short_name[:255] if short_name else None,
-                        "description": description,
-                        "emoji": emoji[:10] if emoji else None,
-                        "location_id": location_id,
-                        "location_name": location_name[:255] if location_name else None,
-                        "sublocation": sublocation[:255] if sublocation else None,
-                        "website_id": website_id,
-                    },
-                )
 
             # Add occurrences
             for i, occ in enumerate(valid_occurrences):
                 cursor.execute(
                     """
-                    INSERT INTO event_occurrences (event_id, start_date, start_time, end_date, end_time, sort_order)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO event_occurrences (event_id, start_date, start_time, end_date, end_time)
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT DO NOTHING
                 """,
-                    (new_event_id, occ[0], occ[1], occ[2], occ[3], i),
+                    (
+                        new_event_id,
+                        occ["start_date"],
+                        occ["start_time"],
+                        occ["end_date"],
+                        occ["end_time"],
+                    ),
                 )
 
             # Add URL
             if url:
                 cursor.execute(
-                    "INSERT INTO event_urls (event_id, url, sort_order) VALUES (%s, %s, 0)",
+                    "INSERT INTO event_urls (event_id, url) VALUES (%s, %s)",
                     (new_event_id, url[:2000]),
                 )
 
             # Add tags
             for tag in tags:
-                if tag:
+                if tag and isinstance(tag, str):
                     # Get or create tag
                     cursor.execute("SELECT id FROM tags WHERE name = %s", (tag[:100],))
                     tag_row = cursor.fetchone()
@@ -716,15 +766,24 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                         (new_event_id, tag_id),
                     )
 
-            # Link crawl_event to new event
+            # Link extracted_event to new event
             cursor.execute(
-                "INSERT INTO event_sources (event_id, crawl_event_id, is_primary) VALUES (%s, %s, TRUE)",
-                (new_event_id, ce_id),
+                "INSERT INTO event_sources (event_id, extracted_event_id, source_id, is_primary) VALUES (%s, %s, %s, TRUE)",
+                (new_event_id, ee_id, source_id),
             )
+
+            _log_extracted_event(
+                cursor,
+                ee_id,
+                "created",
+                event_id=new_event_id,
+                message=f"Created new event {new_event_id}",
+            )
+            connection.commit()
 
             # Add to lookup indexes for future dedup within this batch
             event_entry = {"id": new_event_id, "name": name}
-            event_dates[new_event_id] = crawl_event_dates
+            event_dates[new_event_id] = extracted_event_dates
 
             if location_id is not None:
                 if location_id not in existing_events_by_location_id:
@@ -737,79 +796,73 @@ def merge_crawl_events(cursor, connection, crawl_run_id=None):
                     existing_events_by_coords[key] = []
                 existing_events_by_coords[key].append(event_entry)
 
-            if location_name:
-                loc_key = normalize_name_for_dedup(location_name)
-                if loc_key and len(loc_key) >= 3:
-                    if loc_key not in existing_events_by_location:
-                        existing_events_by_location[loc_key] = []
-                    existing_events_by_location[loc_key].append(event_entry)
-
-            if website_id is not None:
-                if website_id not in existing_events_by_website:
-                    existing_events_by_website[website_id] = []
-                existing_events_by_website[website_id].append(event_entry)
+            if source_id is not None:
+                if source_id not in existing_events_by_source:
+                    existing_events_by_source[source_id] = []
+                existing_events_by_source[source_id].append(event_entry)
 
             new_events_count += 1
 
-    connection.commit()
     print(f"  Added {new_events_count} new events, merged {merged_count} duplicates")
 
     # Archive outdated events after merging
-    # Only archive for websites where we processed crawl_events from their LATEST
+    # Only archive for sources where we processed extracted_events from their LATEST
     # crawl result. This prevents mass-archiving when processing a backlog of old
-    # crawl_events from historical crawls.
-    if new_crawl_events:
-        crawl_event_ids = [row[0] for row in new_crawl_events]
-        placeholders = ",".join(["%s"] * len(crawl_event_ids))
+    # extracted_events from historical crawls.
+    if new_extracted_events:
+        extracted_event_ids = [row[0] for row in new_extracted_events]
+        placeholders = ",".join(["%s"] * len(extracted_event_ids))
         cursor.execute(
             f"""
-            SELECT DISTINCT cr.website_id
-            FROM crawl_events ce
-            JOIN crawl_results cr ON ce.crawl_result_id = cr.id
-            JOIN event_sources es ON ce.id = es.crawl_event_id
-            WHERE ce.id IN ({placeholders})
+            SELECT DISTINCT cr.source_id
+            FROM extracted_events ee
+            JOIN crawl_results cr ON ee.crawl_result_id = cr.id
+            JOIN event_sources es ON ee.id = es.extracted_event_id
+            WHERE ee.id IN ({placeholders})
               AND cr.id = (
                   SELECT MAX(cr2.id)
                   FROM crawl_results cr2
-                  WHERE cr2.website_id = cr.website_id
+                  WHERE cr2.source_id = cr.source_id
                     AND cr2.status IN ('processed', 'extracted')
               )
         """,
-            crawl_event_ids,
+            extracted_event_ids,
         )
 
-        website_ids = [row[0] for row in cursor.fetchall()]
+        source_ids = [row[0] for row in cursor.fetchall()]
         total_archived = 0
         total_upcoming_flagged = 0
 
-        for website_id in website_ids:
+        for sid in source_ids:
             archived_count, upcoming_events = db.archive_outdated_events(
-                cursor, connection, website_id
+                cursor, connection, sid
             )
             if archived_count > 0:
-                # Get website name for logging
-                cursor.execute("SELECT name FROM websites WHERE id = %s", (website_id,))
+                # Get source name for logging
+                cursor.execute("SELECT name FROM sources WHERE id = %s", (sid,))
                 result = cursor.fetchone()
-                website_name = result[0] if result else f"ID {website_id}"
+                source_name = result[0] if result else f"ID {sid}"
                 print(
-                    f"  Archived {archived_count} outdated event(s) from {website_name}"
+                    f"  Archived {archived_count} outdated event(s) from {source_name}"
                 )
                 total_archived += archived_count
 
                 # Log warnings for upcoming events (rare - may indicate crawl issues)
                 if upcoming_events:
                     print(
-                        f"    ⚠️  WARNING: {len(upcoming_events)} upcoming event(s) archived (may indicate crawl failure):"
+                        f"    WARNING: {len(upcoming_events)} upcoming event(s) archived (may indicate crawl failure):"
                     )
-                    for event_id, name, next_occ in upcoming_events:
-                        print(f"        - Event {event_id}: {name} (next: {next_occ})")
+                    for event_id, event_name, next_occ in upcoming_events:
+                        print(
+                            f"        - Event {event_id}: {event_name} (next: {next_occ})"
+                        )
                     total_upcoming_flagged += len(upcoming_events)
 
         if total_archived > 0:
             print(f"  Total archived: {total_archived}")
         if total_upcoming_flagged > 0:
             print(
-                f"  ⚠️  Total upcoming events archived: {total_upcoming_flagged} (review recommended)"
+                f"  Total upcoming events archived: {total_upcoming_flagged} (review recommended)"
             )
 
     return new_events_count, merged_count
