@@ -140,7 +140,7 @@ def _pick_emoji(clasificaciones_dict):
 def map_json_api_to_extracted(events_dict):
     """Map Alternativa Teatral structured JSON directly to the Event schema.
 
-    Produces a JSON string matching ``{"events": [...]}``, the format that
+    Returns a dict ``{"events": [...]}``, the format that
     ``_parse_json_events()`` in processor.py expects.  This bypasses Gemini
     extraction entirely for structured API sources.
 
@@ -198,7 +198,7 @@ def map_json_api_to_extracted(events_dict):
                                 # Convert 24h to 12h for consistency
                                 try:
                                     dt = datetime.strptime(parts[1], "%H:%M")
-                                    start_time = dt.strftime("%-I:%M %p")
+                                    start_time = dt.strftime("%I:%M %p").lstrip("0")
                                 except (ValueError, TypeError):
                                     start_time = parts[1]
                         elif hora:
@@ -230,7 +230,7 @@ def map_json_api_to_extracted(events_dict):
                     }
                 )
 
-    return json.dumps({"events": mapped_events})
+    return {"events": mapped_events}
 
 
 def flatten_events_to_markdown(events_dict, fields_include=None):
@@ -396,16 +396,16 @@ async def crawl_json_api(source, cursor, connection, crawl_job_id):
 
         # Map structured JSON directly to extracted Event schema,
         # skipping Gemini extraction entirely for this structured source
-        extracted_json = map_json_api_to_extracted(filtered)
-        extracted_data = json.loads(extracted_json)
+        extracted_data = map_json_api_to_extracted(filtered)
         extracted_event_count = len(extracted_data.get("events", []))
 
         if extracted_event_count > 0:
             db.update_crawl_result_extracted(
-                cursor, connection, crawl_result_id, extracted_json
+                cursor, connection, crawl_result_id, json.dumps(extracted_data)
             )
             print(
                 f"    - Directly mapped {extracted_event_count} events "
+                f"from {filtered_count} source events "
                 f"(skipped Gemini extraction)"
             )
         else:

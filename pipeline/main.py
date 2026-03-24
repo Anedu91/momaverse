@@ -428,7 +428,7 @@ async def run_pipeline(source_ids=None, limit=None):
 
         # Show summary
         print("Summary:")
-        print(f"  - Sources crawled: {len(crawl_results)}")
+        print(f"  - Sources crawled: {len(crawl_results) + len(json_api_sources)}")
         if incomplete_crawled:
             print(f"  - Resumed extractions: {len(incomplete_crawled)}")
         if incomplete_extracted:

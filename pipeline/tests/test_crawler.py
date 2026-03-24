@@ -1,6 +1,5 @@
 """Tests for crawler.py JSON API mapping and JSONP handling."""
 
-import json
 import os
 import sys
 
@@ -122,16 +121,15 @@ def _make_event(
 class TestMapJsonApiToExtracted:
     """Tests for the Alternativa Teatral direct mapping."""
 
-    def test_basic_mapping_produces_valid_json(self):
+    def test_basic_mapping_produces_valid_dict(self):
         events_dict = {"1": _make_event()}
-        result = map_json_api_to_extracted(events_dict)
-        data = json.loads(result)
+        data = map_json_api_to_extracted(events_dict)
         assert "events" in data
         assert len(data["events"]) == 1
 
     def test_event_fields_mapped_correctly(self):
         events_dict = {"1": _make_event()}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         event = data["events"][0]
 
         assert event["name"] == "Test Show"
@@ -143,7 +141,7 @@ class TestMapJsonApiToExtracted:
 
     def test_occurrences_parsed_from_proxima_fecha(self):
         events_dict = {"1": _make_event()}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         occ = data["events"][0]["occurrences"][0]
 
         assert occ["start_date"] == "2026-04-10"
@@ -170,7 +168,7 @@ class TestMapJsonApiToExtracted:
             }
         }
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert len(data["events"][0]["occurrences"]) == 2
 
     def test_multiple_lugares_create_separate_events(self):
@@ -186,19 +184,19 @@ class TestMapJsonApiToExtracted:
             },
         }
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert len(data["events"]) == 2
         locations = {e["location"] for e in data["events"]}
         assert locations == {"Teatro A", "Teatro B"}
 
     def test_empty_events_dict(self):
-        data = json.loads(map_json_api_to_extracted({}))
+        data = map_json_api_to_extracted({})
         assert data == {"events": []}
 
     def test_event_without_funciones_skipped(self):
         lugares = {"100": {"nombre": "Teatro X", "funciones": {}}}
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert len(data["events"]) == 0
 
     def test_funcion_without_proxima_fecha_skipped(self):
@@ -210,7 +208,7 @@ class TestMapJsonApiToExtracted:
             }
         }
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert len(data["events"]) == 0
 
     def test_lugar_without_nombre_skipped(self):
@@ -221,7 +219,7 @@ class TestMapJsonApiToExtracted:
             }
         }
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert len(data["events"]) == 0
 
     def test_description_includes_clasificaciones_and_venue(self):
@@ -230,7 +228,7 @@ class TestMapJsonApiToExtracted:
             "2": {"descripcion": "Humor"},
         }
         events_dict = {"1": _make_event(clasificaciones=clasificaciones)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         desc = data["events"][0]["description"]
         assert "Teatro" in desc
         assert "Humor" in desc
@@ -242,24 +240,23 @@ class TestMapJsonApiToExtracted:
             "2": {"descripcion": "Humor"},
         }
         events_dict = {"1": _make_event(clasificaciones=clasificaciones)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert data["events"][0]["hashtags"] == ["Teatro", "Humor"]
 
     def test_no_clasificaciones_defaults_to_teatro(self):
         events_dict = {"1": _make_event(clasificaciones={})}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert data["events"][0]["hashtags"] == ["Teatro"]
 
     def test_url_none_when_no_slug(self):
         events_dict = {"1": _make_event(url_slug="")}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         assert data["events"][0]["url"] is None
 
     def test_output_compatible_with_parse_json_events(self):
         """Verify the output format is parseable by _parse_json_events."""
         events_dict = {"1": _make_event()}
-        result = map_json_api_to_extracted(events_dict)
-        data = json.loads(result)
+        data = map_json_api_to_extracted(events_dict)
 
         # Validate structure matches what _parse_json_events expects
         assert "events" in data
@@ -287,7 +284,7 @@ class TestMapJsonApiToExtracted:
             }
         }
         events_dict = {"1": _make_event(lugares=lugares)}
-        data = json.loads(map_json_api_to_extracted(events_dict))
+        data = map_json_api_to_extracted(events_dict)
         times = [o["start_time"] for o in data["events"][0]["occurrences"]]
         assert "9:30 AM" in times
         assert "2:00 PM" in times
