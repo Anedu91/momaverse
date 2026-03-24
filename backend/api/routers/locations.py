@@ -1,13 +1,17 @@
 import asyncio
-from typing import Annotated
+import logging
+from typing import Annotated, Literal
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import delete, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from api.dependencies import CurrentUserDep, GeoapifyKeyDep, SessionDep
+from api.dependencies import AdminUserDep, CurrentUserDep, GeoapifyKeyDep, SessionDep
 from api.models.event import Event
 from api.models.location import Location, LocationAlternateName, LocationTag
+from api.models.tag import Tag
 from api.schemas.common import PaginatedResponse
 from api.schemas.location import (
     BackfillResponse,
@@ -27,7 +31,12 @@ from api.services.geocoding import (
 )
 from api.services.tags import get_or_create_tag
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/locations", tags=["locations"])
+
+# Module-level semaphore shared across all requests for global rate limiting
+_geocode_semaphore = asyncio.Semaphore(5)
 
 
 async def _refresh_location(db: SessionDep, location_id: int) -> Location:
@@ -139,16 +148,14 @@ async def bulk_create_locations(
         if normalized:
             existing_names.add(normalized)
 
-    sem = asyncio.Semaphore(5)
-
     async def _geocode(
-        idx: int, loc: LocationCreate
+        idx: int, loc: LocationCreate, client: httpx.AsyncClient
     ) -> tuple[int, GeocodingResult | None]:
         if loc.lat is not None and loc.lng is not None:
             return idx, None  # already has coords
-        async with sem:
+        async with _geocode_semaphore:
             return idx, await geocode_location_name(
-                loc.name, api_key, address=loc.address
+                loc.name, api_key, address=loc.address, client=client
             )
 
     # Filter out duplicates before geocoding (save API calls)
@@ -173,20 +180,39 @@ async def bulk_create_locations(
             existing_names.add(normalized)
         non_duplicate_indices.append(i)
 
-    # Geocode only non-duplicate items in parallel
-    geocode_tasks = [_geocode(i, data.locations[i]) for i in non_duplicate_indices]
-    geocode_results_raw = await asyncio.gather(*geocode_tasks, return_exceptions=True)
+    # Pre-fetch all unique tags in two queries instead of O(n) per-item lookups
+    all_tag_names: set[str] = set()
+    for i in non_duplicate_indices:
+        all_tag_names.update(data.locations[i].tags)
 
-    # Build index → result map
+    tag_map: dict[str, Tag] = {}
+    if all_tag_names:
+        existing_tags_stmt = select(Tag).where(Tag.name.in_(all_tag_names))
+        existing_tags_result = await db.execute(existing_tags_stmt)
+        for tag in existing_tags_result.scalars():
+            tag_map[tag.name] = tag
+
+    # Geocode only non-duplicate items in parallel, sharing one httpx client
+    async with httpx.AsyncClient(timeout=10.0) as http_client:
+        geocode_tasks = [
+            _geocode(i, data.locations[i], http_client) for i in non_duplicate_indices
+        ]
+        geocode_results_raw = await asyncio.gather(
+            *geocode_tasks, return_exceptions=True
+        )
+
+    # Build index -> result map; log any exceptions
     geocode_map: dict[int, GeocodingResult | None] = {}
     for item in geocode_results_raw:
         if isinstance(item, BaseException):
+            logger.warning("Geocode task failed: %s", item)
             continue
         idx, result = item
         geocode_map[idx] = result
 
     for i in non_duplicate_indices:
         loc_data = data.locations[i]
+        savepoint = await db.begin_nested()
         try:
             geo_result = geocode_map.get(i)
             lat = loc_data.lat
@@ -219,11 +245,17 @@ async def bulk_create_locations(
                     )
                 )
             for tag_name in loc_data.tags:
-                tag = await get_or_create_tag(db, tag_name)
+                if tag_name in tag_map:
+                    tag = tag_map[tag_name]
+                else:
+                    tag = await get_or_create_tag(db, tag_name)
+                    tag_map[tag_name] = tag
                 db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
+            await savepoint.commit()
+
             refreshed = await _refresh_location(db, location.id)
-            item_status = "created"
+            item_status: Literal["created", "geocode_failed"] = "created"
             if loc_data.lat is None and loc_data.lng is None and lat is None:
                 item_status = "geocode_failed"
 
@@ -235,7 +267,17 @@ async def bulk_create_locations(
                 )
             )
             created_count += 1
+        except IntegrityError:
+            await savepoint.rollback()
+            results.append(
+                BulkCreateResultItem(
+                    index=i,
+                    status="duplicate",
+                    error=f"Location '{loc_data.name}' already exists (race)",
+                )
+            )
         except Exception as exc:
+            await savepoint.rollback()
             error_count += 1
             results.append(
                 BulkCreateResultItem(index=i, status="error", error=str(exc))
@@ -254,10 +296,11 @@ async def bulk_create_locations(
 @router.post("/backfill-geocode", response_model=BackfillResponse)
 async def backfill_geocode(
     db: SessionDep,
-    user: CurrentUserDep,
+    user: AdminUserDep,
     api_key: GeoapifyKeyDep,
+    limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> BackfillResponse:
-    """Geocode all active locations missing coordinates."""
+    """Geocode active locations missing coordinates. Admin only."""
     stmt = (
         select(Location)
         .where(
@@ -268,6 +311,7 @@ async def backfill_geocode(
             selectinload(Location.alternate_names),
             selectinload(Location.tags),
         )
+        .limit(limit)
     )
     result = await db.execute(stmt)
     locations = list(result.scalars().all())
@@ -275,20 +319,24 @@ async def backfill_geocode(
     if not locations:
         return BackfillResponse(total_processed=0, geocoded=0, failed=0, skipped=0)
 
-    sem = asyncio.Semaphore(5)
-
-    async def _geocode(loc: Location) -> tuple[int, GeocodingResult | None]:
-        async with sem:
+    async def _geocode(
+        loc: Location, client: httpx.AsyncClient
+    ) -> tuple[int, GeocodingResult | None]:
+        async with _geocode_semaphore:
             return loc.id, await geocode_location_name(
-                loc.name, api_key, address=loc.address
+                loc.name, api_key, address=loc.address, client=client
             )
 
-    geocode_tasks = [_geocode(loc) for loc in locations]
-    geocode_results_raw = await asyncio.gather(*geocode_tasks, return_exceptions=True)
+    async with httpx.AsyncClient(timeout=10.0) as http_client:
+        geocode_tasks = [_geocode(loc, http_client) for loc in locations]
+        geocode_results_raw = await asyncio.gather(
+            *geocode_tasks, return_exceptions=True
+        )
 
     geocode_map: dict[int, GeocodingResult | None] = {}
     for item in geocode_results_raw:
         if isinstance(item, BaseException):
+            logger.warning("Backfill geocode task failed: %s", item)
             continue
         loc_id, geo_result = item
         geocode_map[loc_id] = geo_result

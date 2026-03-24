@@ -65,6 +65,27 @@ async def auth_headers(sample_user: User) -> dict[str, str]:
 
 
 @pytest_asyncio.fixture
+async def admin_user(db_session: AsyncSession) -> User:
+    """Create an admin user for authenticated requests."""
+    user = User(
+        email="admin@example.com",
+        display_name="Admin User",
+        password_hash=hash_password("adminpass123"),
+        is_admin=True,
+    )
+    db_session.add(user)
+    await db_session.flush()
+    return user
+
+
+@pytest_asyncio.fixture
+async def admin_headers(admin_user: User) -> dict[str, str]:
+    """Return Authorization header dict for the admin_user."""
+    token = create_access_token(admin_user.id)
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture
 async def sample_location(db_session: AsyncSession) -> Location:
     """Create a single location in the DB."""
     location = Location(
@@ -815,7 +836,7 @@ class TestBackfillGeocode:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
-        auth_headers: dict[str, str],
+        admin_headers: dict[str, str],
     ) -> None:
         loc_no_coords = Location(name="Missing Coords")
         loc_with_coords = Location(name="Has Coords", lat=-34.60, lng=-58.38)
@@ -828,7 +849,7 @@ class TestBackfillGeocode:
             return_value=_MOCK_GEO_RESULT,
         ):
             resp = await client.post(
-                "/api/v1/locations/backfill-geocode", headers=auth_headers
+                "/api/v1/locations/backfill-geocode", headers=admin_headers
             )
 
         assert resp.status_code == 200
@@ -842,14 +863,14 @@ class TestBackfillGeocode:
         self,
         client: AsyncClient,
         db_session: AsyncSession,
-        auth_headers: dict[str, str],
+        admin_headers: dict[str, str],
     ) -> None:
         loc = Location(name="Complete", lat=-34.60, lng=-58.38)
         db_session.add(loc)
         await db_session.flush()
 
         resp = await client.post(
-            "/api/v1/locations/backfill-geocode", headers=auth_headers
+            "/api/v1/locations/backfill-geocode", headers=admin_headers
         )
 
         assert resp.status_code == 200
@@ -860,3 +881,38 @@ class TestBackfillGeocode:
     async def test_backfill_requires_auth(self, client: AsyncClient) -> None:
         resp = await client.post("/api/v1/locations/backfill-geocode")
         assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_backfill_requires_admin(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        resp = await client.post(
+            "/api/v1/locations/backfill-geocode", headers=auth_headers
+        )
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_backfill_respects_limit(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        admin_headers: dict[str, str],
+    ) -> None:
+        # Create 3 locations without coords
+        for i in range(3):
+            db_session.add(Location(name=f"No Coords {i}"))
+        await db_session.flush()
+
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            new_callable=AsyncMock,
+            return_value=_MOCK_GEO_RESULT,
+        ):
+            resp = await client.post(
+                "/api/v1/locations/backfill-geocode?limit=2",
+                headers=admin_headers,
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_processed"] == 2

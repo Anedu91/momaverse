@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -118,7 +118,7 @@ class BulkCreateResultItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     index: int
-    status: str  # "created" | "geocode_failed" | "error"
+    status: Literal["created", "geocode_failed", "error", "duplicate"]
     location: LocationDetailResponse | None = None
     error: str | None = None
 

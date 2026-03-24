@@ -118,6 +118,21 @@ CurrentUserDep = Annotated[User, Depends(get_current_user)]
 OptionalUserDep = Annotated[User | None, Depends(get_optional_user)]
 
 
+async def get_admin_user(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Require the current user to be an admin. Raises 403 if not."""
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
+
+
+AdminUserDep = Annotated[User, Depends(get_admin_user)]
+
+
 # ---------------------------------------------------------------------------
 # Geocoding
 # ---------------------------------------------------------------------------

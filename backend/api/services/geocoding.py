@@ -64,10 +64,12 @@ async def geocode_location_name(
     api_key: str,
     *,
     address: str | None = None,
+    client: httpx.AsyncClient | None = None,
 ) -> GeocodingResult | None:
     """Forward-geocode a venue name via Geoapify, biased to Buenos Aires.
 
     Returns None if no result found, API call fails, or result is outside BA.
+    If *client* is provided it will be reused; otherwise a new one is created.
     """
     search_text = f"{name}, {address}" if address else f"{name}, Buenos Aires"
     params: dict[str, str | int] = {
@@ -84,13 +86,16 @@ async def geocode_location_name(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        if client is not None:
             resp = await client.get(GEOAPIFY_SEARCH_URL, params=params)
             resp.raise_for_status()
+        else:
+            async with httpx.AsyncClient(timeout=10.0) as _client:
+                resp = await _client.get(GEOAPIFY_SEARCH_URL, params=params)
+                resp.raise_for_status()
+        data: dict[str, object] = resp.json()
     except httpx.HTTPError:
         return None
-
-    data: dict[str, object] = resp.json()
     results = data.get("results")
     if not isinstance(results, list) or not results:
         return None
