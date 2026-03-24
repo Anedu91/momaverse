@@ -207,7 +207,7 @@ def dump_local_tables(tables, create_tables=False, full_sync=False):
         delete_sql = "\n".join(delete_statements) + "\n\n"
 
         # Read existing dump and prepend delete statements
-        with open(temp_file, "r", encoding="utf-8", errors="replace") as f:
+        with open(temp_file, encoding="utf-8", errors="replace") as f:
             dump_content = f.read()
         with open(temp_file, "w", encoding="utf-8") as f:
             f.write(delete_sql + dump_content)

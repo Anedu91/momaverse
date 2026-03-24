@@ -9,7 +9,6 @@ from api.models.source import CrawlConfig, Source
 from api.models.tag import Tag, TagRule
 from api.models.user import User
 
-
 # ---------------------------------------------------------------------------
 # Core models
 # ---------------------------------------------------------------------------

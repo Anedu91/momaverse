@@ -4,15 +4,16 @@ from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.database import get_db
 from api.dependencies import create_access_token, hash_password
 from api.models.crawl import CrawlContent, CrawlJob, CrawlResult, ExtractedEvent
 from api.models.source import Source
 from api.models.user import User
 from api.routers.crawl_jobs import router
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 PREFIX = "/api/v1/crawl-jobs"
 

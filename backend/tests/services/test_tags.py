@@ -1,6 +1,7 @@
 """Tests for the tag get-or-create helper."""
 
 import pytest
+
 from api.services.tags import get_or_create_tag
 
 

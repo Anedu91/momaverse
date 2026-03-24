@@ -5,6 +5,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.database import get_db
 from api.dependencies import create_access_token, get_geoapify_key, hash_password
 from api.models.event import Event
@@ -13,9 +17,6 @@ from api.models.tag import Tag
 from api.models.user import User
 from api.routers.locations import router
 from api.services.geocoding import GeocodingResult
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _make_app(

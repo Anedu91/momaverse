@@ -119,7 +119,7 @@ def get_current_schema(cursor):
 
 def parse_schema_sql():
     """Parse schema_postgres.sql to extract expected tables and columns."""
-    with open(SCHEMA_FILE, "r") as f:
+    with open(SCHEMA_FILE) as f:
         content = f.read()
 
     schema = {"tables": {}}

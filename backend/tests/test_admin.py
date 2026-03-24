@@ -15,7 +15,6 @@ from api.admin.views import (
 )
 from api.dependencies import hash_password
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -129,8 +128,9 @@ def test_all_admin_views_registered() -> None:
     """All expected admin views should be present in the ALL_VIEWS list."""
     assert len(ALL_VIEWS) == 13
 
-    from fastapi import FastAPI
     from unittest.mock import MagicMock
+
+    from fastapi import FastAPI
 
     test_app = FastAPI()
     with patch("api.admin.engine", MagicMock()):

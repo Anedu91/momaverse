@@ -647,7 +647,7 @@ async def crawl_source(crawler, source, cursor, connection, crawl_job_id):
         # Execute crawl with timeout
         try:
             await asyncio.wait_for(crawl_urls(), timeout=crawl_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error_msg = f"Crawl timed out after {crawl_timeout} seconds"
             print(f"    - {error_msg}")
             # If we got partial content, still save it
