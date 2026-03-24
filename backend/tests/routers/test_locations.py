@@ -1,22 +1,26 @@
 """Tests for the locations router."""
 
 from collections.abc import AsyncGenerator
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
 from api.database import get_db
-from api.dependencies import create_access_token, hash_password
+from api.dependencies import create_access_token, get_geoapify_key, hash_password
 from api.models.event import Event
 from api.models.location import Location, LocationAlternateName, LocationTag
 from api.models.tag import Tag
 from api.models.user import User
 from api.routers.locations import router
+from api.services.geocoding import GeocodingResult
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-def _make_app(db_session: AsyncSession) -> FastAPI:
+def _make_app(
+    db_session: AsyncSession, *, geoapify_key: str = "test-api-key"
+) -> FastAPI:
     """Create a minimal FastAPI app with the locations router for testing."""
     app = FastAPI()
     app.include_router(router, prefix="/api/v1")
@@ -24,7 +28,11 @@ def _make_app(db_session: AsyncSession) -> FastAPI:
     async def _override_get_db():
         yield db_session
 
+    async def _override_geoapify_key() -> str:
+        return geoapify_key
+
     app.dependency_overrides[get_db] = _override_get_db
+    app.dependency_overrides[get_geoapify_key] = _override_geoapify_key
     return app
 
 
@@ -580,3 +588,275 @@ class TestSoftDeleteLocation:
             item for item in body["data"] if item["name"] == "Event Count Location"
         )
         assert loc_data["event_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# Bulk create locations
+# ---------------------------------------------------------------------------
+
+_MOCK_GEO_RESULT = GeocodingResult(
+    lat=-34.6037, lng=-58.3816, formatted_address="Obelisco, BA", confidence=0.9
+)
+
+
+class TestBulkCreateLocations:
+    @pytest.mark.asyncio
+    async def test_bulk_create_success(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        payload = {
+            "locations": [
+                {"name": "Venue A"},
+                {"name": "Venue B"},
+            ]
+        }
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            new_callable=AsyncMock,
+            return_value=_MOCK_GEO_RESULT,
+        ):
+            resp = await client.post(
+                "/api/v1/locations/bulk", json=payload, headers=auth_headers
+            )
+
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["total"] == 2
+        assert body["created"] == 2
+        assert body["errors"] == 0
+        assert len(body["results"]) == 2
+        for item in body["results"]:
+            assert item["status"] == "created"
+            assert item["location"]["lat"] == pytest.approx(-34.6037)
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_with_existing_coords(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        payload = {"locations": [{"name": "With Coords", "lat": -34.60, "lng": -58.38}]}
+        mock_geocode = AsyncMock(return_value=_MOCK_GEO_RESULT)
+        with patch("api.routers.locations.geocode_location_name", mock_geocode):
+            resp = await client.post(
+                "/api/v1/locations/bulk", json=payload, headers=auth_headers
+            )
+
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["results"][0]["location"]["lat"] == pytest.approx(-34.60)
+        # Should not have called geocode since coords were provided
+        mock_geocode.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_max_50_enforced(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        payload = {"locations": [{"name": f"Venue {i}"} for i in range(51)]}
+        resp = await client.post(
+            "/api/v1/locations/bulk", json=payload, headers=auth_headers
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_partial_geocode_failure(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        payload = {"locations": [{"name": "Good"}, {"name": "Bad"}]}
+
+        call_count = 0
+
+        async def _mock_geocode(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return _MOCK_GEO_RESULT
+            return None
+
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            side_effect=_mock_geocode,
+        ):
+            resp = await client.post(
+                "/api/v1/locations/bulk", json=payload, headers=auth_headers
+            )
+
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["created"] == 2  # both created, one without coords
+        statuses = [r["status"] for r in body["results"]]
+        assert "created" in statuses
+        assert "geocode_failed" in statuses
+
+    @pytest.mark.asyncio
+    async def test_bulk_create_requires_auth(self, client: AsyncClient) -> None:
+        payload = {"locations": [{"name": "No Auth"}]}
+        resp = await client.post("/api/v1/locations/bulk", json=payload)
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Geocode single location
+# ---------------------------------------------------------------------------
+
+
+class TestGeocodeLocation:
+    @pytest.mark.asyncio
+    async def test_geocode_success(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        auth_headers: dict[str, str],
+    ) -> None:
+        loc = Location(name="No Coords Venue")
+        db_session.add(loc)
+        await db_session.flush()
+
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            new_callable=AsyncMock,
+            return_value=_MOCK_GEO_RESULT,
+        ):
+            resp = await client.post(
+                f"/api/v1/locations/{loc.id}/geocode", headers=auth_headers
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["geocoded"] is True
+        assert body["lat"] == pytest.approx(-34.6037)
+        assert body["lng"] == pytest.approx(-58.3816)
+
+    @pytest.mark.asyncio
+    async def test_geocode_already_has_coords(
+        self,
+        client: AsyncClient,
+        sample_location: Location,
+        auth_headers: dict[str, str],
+    ) -> None:
+        resp = await client.post(
+            f"/api/v1/locations/{sample_location.id}/geocode",
+            headers=auth_headers,
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["geocoded"] is True
+        assert body["lat"] == pytest.approx(40.7614)
+
+    @pytest.mark.asyncio
+    async def test_geocode_force_overwrites(
+        self,
+        client: AsyncClient,
+        sample_location: Location,
+        auth_headers: dict[str, str],
+    ) -> None:
+        mock_geocode = AsyncMock(return_value=_MOCK_GEO_RESULT)
+        with patch("api.routers.locations.geocode_location_name", mock_geocode):
+            resp = await client.post(
+                f"/api/v1/locations/{sample_location.id}/geocode?force=true",
+                headers=auth_headers,
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["geocoded"] is True
+        assert body["lat"] == pytest.approx(-34.6037)
+        mock_geocode.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_geocode_not_found(
+        self, client: AsyncClient, auth_headers: dict[str, str]
+    ) -> None:
+        resp = await client.post(
+            "/api/v1/locations/99999/geocode", headers=auth_headers
+        )
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_geocode_no_result(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        auth_headers: dict[str, str],
+    ) -> None:
+        loc = Location(name="Unknown Place")
+        db_session.add(loc)
+        await db_session.flush()
+
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = await client.post(
+                f"/api/v1/locations/{loc.id}/geocode", headers=auth_headers
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["geocoded"] is False
+        assert body["lat"] is None
+
+    @pytest.mark.asyncio
+    async def test_geocode_requires_auth(
+        self, client: AsyncClient, sample_location: Location
+    ) -> None:
+        resp = await client.post(f"/api/v1/locations/{sample_location.id}/geocode")
+        assert resp.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Backfill geocode
+# ---------------------------------------------------------------------------
+
+
+class TestBackfillGeocode:
+    @pytest.mark.asyncio
+    async def test_backfill_geocodes_missing(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        auth_headers: dict[str, str],
+    ) -> None:
+        loc_no_coords = Location(name="Missing Coords")
+        loc_with_coords = Location(name="Has Coords", lat=-34.60, lng=-58.38)
+        db_session.add_all([loc_no_coords, loc_with_coords])
+        await db_session.flush()
+
+        with patch(
+            "api.routers.locations.geocode_location_name",
+            new_callable=AsyncMock,
+            return_value=_MOCK_GEO_RESULT,
+        ):
+            resp = await client.post(
+                "/api/v1/locations/backfill-geocode", headers=auth_headers
+            )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_processed"] >= 1
+        assert body["geocoded"] >= 1
+        assert body["skipped"] == 0
+
+    @pytest.mark.asyncio
+    async def test_backfill_empty(
+        self,
+        client: AsyncClient,
+        db_session: AsyncSession,
+        auth_headers: dict[str, str],
+    ) -> None:
+        loc = Location(name="Complete", lat=-34.60, lng=-58.38)
+        db_session.add(loc)
+        await db_session.flush()
+
+        resp = await client.post(
+            "/api/v1/locations/backfill-geocode", headers=auth_headers
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["total_processed"] == 0
+
+    @pytest.mark.asyncio
+    async def test_backfill_requires_auth(self, client: AsyncClient) -> None:
+        resp = await client.post("/api/v1/locations/backfill-geocode")
+        assert resp.status_code == 401

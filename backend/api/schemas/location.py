@@ -13,6 +13,11 @@ __all__ = [
     "LocationListItem",
     "AlternateNameResponse",
     "LocationDetailResponse",
+    "GeocodeResponse",
+    "BulkCreateRequest",
+    "BulkCreateResultItem",
+    "BulkCreateResponse",
+    "BackfillResponse",
 ]
 
 
@@ -90,3 +95,43 @@ class LocationListItem(BaseModel):
 class LocationDetailResponse(LocationResponse):
     alternate_names: list[AlternateNameResponse] = []
     tags: list[TagResponse] = []
+
+
+# ---------------------------------------------------------------------------
+# Geocoding schemas
+# ---------------------------------------------------------------------------
+
+
+class GeocodeResponse(BaseModel):
+    lat: float | None = None
+    lng: float | None = None
+    formatted_address: str | None = None
+    confidence: float | None = None
+    geocoded: bool
+
+
+class BulkCreateRequest(BaseModel):
+    locations: Annotated[list[LocationCreate], Field(max_length=50)]
+
+
+class BulkCreateResultItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    index: int
+    status: str  # "created" | "geocode_failed" | "error"
+    location: LocationDetailResponse | None = None
+    error: str | None = None
+
+
+class BulkCreateResponse(BaseModel):
+    total: int
+    created: int
+    errors: int
+    results: list[BulkCreateResultItem]
+
+
+class BackfillResponse(BaseModel):
+    total_processed: int
+    geocoded: int
+    failed: int
+    skipped: int
