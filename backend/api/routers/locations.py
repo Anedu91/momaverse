@@ -20,7 +20,11 @@ from api.schemas.location import (
     LocationListItem,
     LocationUpdate,
 )
-from api.services.geocoding import GeocodingResult, geocode_location_name
+from api.services.geocoding import (
+    GeocodingResult,
+    geocode_location_name,
+    normalize_location_name,
+)
 from api.services.tags import get_or_create_tag
 
 router = APIRouter(prefix="/locations", tags=["locations"])
@@ -114,7 +118,27 @@ async def bulk_create_locations(
     user: CurrentUserDep,
     api_key: GeoapifyKeyDep,
 ) -> BulkCreateResponse:
-    """Create multiple locations with automatic geocoding."""
+    """Create multiple locations with automatic geocoding and dedup."""
+    # -- Build dedup set from existing locations + alternate names --
+    name_stmt = select(Location.name).where(Location.active())
+    alt_stmt = (
+        select(LocationAlternateName.alternate_name)
+        .join(Location)
+        .where(Location.active())
+    )
+    name_rows = await db.execute(name_stmt)
+    alt_rows = await db.execute(alt_stmt)
+
+    existing_names: set[str] = set()
+    for (name,) in name_rows:
+        normalized = normalize_location_name(name)
+        if normalized:
+            existing_names.add(normalized)
+    for (alt_name,) in alt_rows:
+        normalized = normalize_location_name(alt_name)
+        if normalized:
+            existing_names.add(normalized)
+
     sem = asyncio.Semaphore(5)
 
     async def _geocode(
@@ -127,8 +151,30 @@ async def bulk_create_locations(
                 loc.name, api_key, address=loc.address
             )
 
-    # Geocode all items in parallel
-    geocode_tasks = [_geocode(i, loc) for i, loc in enumerate(data.locations)]
+    # Filter out duplicates before geocoding (save API calls)
+    non_duplicate_indices: list[int] = []
+    results: list[BulkCreateResultItem] = []
+    created_count = 0
+    error_count = 0
+
+    for i, loc_data in enumerate(data.locations):
+        normalized = normalize_location_name(loc_data.name)
+        if normalized and normalized in existing_names:
+            results.append(
+                BulkCreateResultItem(
+                    index=i,
+                    status="duplicate",
+                    error=f"Location '{loc_data.name}' already exists",
+                )
+            )
+            continue
+        # Also add to set to catch duplicates within the batch
+        if normalized:
+            existing_names.add(normalized)
+        non_duplicate_indices.append(i)
+
+    # Geocode only non-duplicate items in parallel
+    geocode_tasks = [_geocode(i, data.locations[i]) for i in non_duplicate_indices]
     geocode_results_raw = await asyncio.gather(*geocode_tasks, return_exceptions=True)
 
     # Build index → result map
@@ -139,11 +185,8 @@ async def bulk_create_locations(
         idx, result = item
         geocode_map[idx] = result
 
-    results: list[BulkCreateResultItem] = []
-    created_count = 0
-    error_count = 0
-
-    for i, loc_data in enumerate(data.locations):
+    for i in non_duplicate_indices:
+        loc_data = data.locations[i]
         try:
             geo_result = geocode_map.get(i)
             lat = loc_data.lat
@@ -199,6 +242,7 @@ async def bulk_create_locations(
             )
 
     await db.commit()
+    results.sort(key=lambda r: r.index)
     return BulkCreateResponse(
         total=len(data.locations),
         created=created_count,

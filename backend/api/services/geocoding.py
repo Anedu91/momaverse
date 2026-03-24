@@ -1,6 +1,7 @@
 """Geoapify geocoding service for Buenos Aires venue resolution."""
 
 import math
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -24,6 +25,17 @@ class GeocodingResult:
     lng: float
     formatted_address: str
     confidence: float
+
+
+def normalize_location_name(name: str) -> str:
+    """Normalize a location name for dedup matching.
+
+    Ported from pipeline/processor.py::_normalize_location_name.
+    """
+    if not name:
+        return ""
+    normalized = re.sub(r"[^\w\s]", "", name.lower())
+    return " ".join(normalized.split())
 
 
 def is_within_buenos_aires(lat: float, lng: float) -> bool:
