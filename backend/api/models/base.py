@@ -1,5 +1,5 @@
 import enum
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import TIMESTAMP, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -10,25 +10,25 @@ from sqlalchemy.sql.elements import ColumnElement
 # ============================================================================
 
 
-class SourceType(str, enum.Enum):
+class SourceType(enum.StrEnum):
     crawler = "crawler"
     api = "api"
     user_submission = "user_submission"
     partner_feed = "partner_feed"
 
 
-class CrawlMode(str, enum.Enum):
+class CrawlMode(enum.StrEnum):
     browser = "browser"
     json_api = "json_api"
 
 
-class CrawlJobStatus(str, enum.Enum):
+class CrawlJobStatus(enum.StrEnum):
     running = "running"
     completed = "completed"
     failed = "failed"
 
 
-class CrawlResultStatus(str, enum.Enum):
+class CrawlResultStatus(enum.StrEnum):
     pending = "pending"
     crawled = "crawled"
     extracted = "extracted"
@@ -36,13 +36,13 @@ class CrawlResultStatus(str, enum.Enum):
     failed = "failed"
 
 
-class TagRuleType(str, enum.Enum):
+class TagRuleType(enum.StrEnum):
     rewrite = "rewrite"
     exclude = "exclude"
     remove = "remove"
 
 
-class ExtractedEventStatus(str, enum.Enum):
+class ExtractedEventStatus(enum.StrEnum):
     created = "created"
     merged = "merged"
     skipped_no_location = "skipped_no_location"
@@ -50,14 +50,14 @@ class ExtractedEventStatus(str, enum.Enum):
     skipped_duplicate = "skipped_duplicate"
 
 
-class EventStatus(str, enum.Enum):
+class EventStatus(enum.StrEnum):
     active = "active"
     archived = "archived"
     draft = "draft"
     cancelled = "cancelled"
 
 
-class LocationType(str, enum.Enum):
+class LocationType(enum.StrEnum):
     venue = "venue"
     area = "area"
     meeting_point = "meeting_point"
@@ -105,7 +105,7 @@ class SoftDeleteMixin:
         return cls.deleted_at.is_(None)
 
     def soft_delete(self) -> None:
-        self.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+        self.deleted_at = datetime.now(UTC).replace(tzinfo=None)
 
     def restore(self) -> None:
         self.deleted_at = None

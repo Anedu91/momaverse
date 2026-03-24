@@ -1,4 +1,4 @@
-target-version = "py314"
+target-version = "py312"
 line-length = 88
 
 # Only check project Python code, not venvs or node_modules
@@ -14,9 +14,10 @@ select = [
     "W",   # pycodestyle warnings
     "F",   # pyflakes (F401 unused imports, F841 unused variables)
     "I",   # isort (import sorting)
+    "UP",  # pyupgrade (modern Python syntax)
 ]
 # F401 and F841 are NOT in fixable — ruff will error, not auto-fix
-fixable = ["I", "E", "W"]
+fixable = ["I", "E", "W", "UP"]
 unfixable = ["F401", "F841"]
 
 [lint.per-file-ignores]

@@ -83,7 +83,7 @@ def filter_by_date_window(events_dict, days_ahead=30):
                             try:
                                 dt = datetime.strptime(proxima, "%Y-%m-%d %H:%M")
                                 dates_found.append(dt)
-                            except TypeError, ValueError:
+                            except (TypeError, ValueError):
                                 pass
 
         if not dates_found:
@@ -95,6 +95,142 @@ def filter_by_date_window(events_dict, days_ahead=30):
         # else: all dates are past or beyond window -- exclude
 
     return filtered
+
+
+CLASIFICACION_EMOJI_MAP = {
+    "teatro": "\U0001f3ad",
+    "danza": "\U0001f483",
+    "música": "\U0001f3b5",
+    "musica": "\U0001f3b5",
+    "humor": "\U0001f923",
+    "circo": "\U0001f3aa",
+    "infantil": "\U0001f9f8",
+    "títeres": "\U0001f3ad",
+    "titeres": "\U0001f3ad",
+    "stand up": "\U0001f3a4",
+    "comedia musical": "\U0001f3b6",
+    "unipersonal": "\U0001f3ad",
+    "monólogo": "\U0001f3a4",
+    "monologo": "\U0001f3a4",
+    "improvisación": "\U0001f3ad",
+    "improvisacion": "\U0001f3ad",
+    "ópera": "\U0001f3b6",
+    "opera": "\U0001f3b6",
+    "clown": "\U0001f921",
+    "varieté": "\U0001f3aa",
+    "variete": "\U0001f3aa",
+    "performance": "\U0001f3ad",
+    "biodrama": "\U0001f3ac",
+    "poesía": "\U0001f4d6",
+    "poesia": "\U0001f4d6",
+}
+
+
+def _pick_emoji(clasificaciones_dict):
+    """Pick a single emoji from clasificaciones, falling back to calendar."""
+    if not isinstance(clasificaciones_dict, dict):
+        return "\U0001f4c5"  # default calendar
+    for _cid, clas in clasificaciones_dict.items():
+        desc = (clas.get("descripcion") or "").lower().strip()
+        if desc in CLASIFICACION_EMOJI_MAP:
+            return CLASIFICACION_EMOJI_MAP[desc]
+    return "\U0001f3ad"  # generic performing arts
+
+
+def map_json_api_to_extracted(events_dict):
+    """Map Alternativa Teatral structured JSON directly to the Event schema.
+
+    Returns a dict ``{"events": [...]}``, the format that
+    ``_parse_json_events()`` in processor.py expects.  This bypasses Gemini
+    extraction entirely for structured API sources.
+
+    The mapping is intentionally hardcoded for Alternativa Teatral.
+    """
+    mapped_events = []
+
+    for event_id, event in events_dict.items():
+        titulo = event.get("titulo", f"Event {event_id}")
+        url_slug = event.get("url", "")
+        url = f"https://www.alternativateatral.com/{url_slug}" if url_slug else None
+
+        # Clasificaciones -> hashtags + emoji + description parts
+        clasificaciones = event.get("clasificaciones", {})
+        hashtags = []
+        desc_parts = []
+        if isinstance(clasificaciones, dict):
+            for _cid, clas in clasificaciones.items():
+                desc = clas.get("descripcion", "")
+                if desc:
+                    hashtags.append(desc)
+                    desc_parts.append(desc)
+
+        emoji = _pick_emoji(clasificaciones)
+
+        # Lugares -> location + occurrences
+        lugares = event.get("lugares", {})
+        if isinstance(lugares, dict):
+            for _lid, lugar in lugares.items():
+                nombre = lugar.get("nombre", "")
+                if not nombre:
+                    continue
+
+                # Build description from clasificaciones + venue
+                if desc_parts:
+                    description = f"{', '.join(desc_parts)} en {nombre}."
+                else:
+                    description = f"Evento en {nombre}."
+
+                # Collect occurrences from funciones
+                occurrences = []
+                funciones = lugar.get("funciones", {})
+                if isinstance(funciones, dict):
+                    for _fid, funcion in funciones.items():
+                        proxima = funcion.get("proxima_fecha", "")
+                        hora = funcion.get("hora", "")
+
+                        # proxima_fecha is "YYYY-MM-DD HH:MM"
+                        start_date = ""
+                        start_time = ""
+                        if proxima:
+                            parts = proxima.split(" ", 1)
+                            start_date = parts[0]
+                            if len(parts) > 1:
+                                # Convert 24h to 12h for consistency
+                                try:
+                                    dt = datetime.strptime(parts[1], "%H:%M")
+                                    start_time = dt.strftime("%I:%M %p").lstrip("0")
+                                except (ValueError, TypeError):
+                                    start_time = parts[1]
+                        elif hora:
+                            # No proxima_fecha but has hora — skip, no date
+                            continue
+
+                        if start_date:
+                            occ = {
+                                "start_date": start_date,
+                                "start_time": start_time or None,
+                                "end_date": None,
+                                "end_time": None,
+                            }
+                            occurrences.append(occ)
+
+                if not occurrences:
+                    continue
+
+                mapped_events.append(
+                    {
+                        "name": titulo,
+                        "location": nombre,
+                        "sublocation": None,
+                        "occurrences": occurrences,
+                        "description": description,
+                        "url": url,
+                        "hashtags": hashtags if hashtags else ["Teatro"],
+                        "emoji": emoji,
+                    }
+                )
+
+    return {"events": mapped_events}
 
 
 def flatten_events_to_markdown(events_dict, fields_include=None):
@@ -210,16 +346,16 @@ async def crawl_json_api(source, cursor, connection, crawl_job_id):
 
         raw_text = response.text
 
-        # Strip JSONP wrapper if configured
-        jsonp_callback = config.get("jsonp_callback")
-        if jsonp_callback:
-            raw_text = strip_jsonp(raw_text, jsonp_callback)
-
         # Strip BOM if present
         raw_text = raw_text.lstrip("\ufeff")
 
-        # Parse JSON
-        data = json.loads(raw_text)
+        # Try plain JSON first, fall back to JSONP stripping
+        jsonp_callback = config.get("jsonp_callback")
+        try:
+            data = json.loads(raw_text)
+        except json.JSONDecodeError:
+            raw_text = strip_jsonp(raw_text, jsonp_callback)
+            data = json.loads(raw_text)
 
         # Navigate data_path (e.g., 'espectaculos')
         data_path = config.get("data_path", "")
@@ -244,7 +380,7 @@ async def crawl_json_api(source, cursor, connection, crawl_job_id):
         filtered_count = len(filtered) if isinstance(filtered, dict) else 0
         print(f"    - Events after date filter ({date_window_days}d): {filtered_count}")
 
-        # Flatten to markdown
+        # Flatten to markdown (kept for audit/debugging)
         fields_include = config.get("fields_include")
         markdown = flatten_events_to_markdown(filtered, fields_include)
 
@@ -255,13 +391,30 @@ async def crawl_json_api(source, cursor, connection, crawl_job_id):
             db.update_source_last_crawled(cursor, connection, source["id"])
             return None, None
 
-        # Store markdown (same as browser crawl path)
+        # Store markdown as crawled_content for audit trail
         db.update_crawl_result_crawled(cursor, connection, crawl_result_id, markdown)
-        db.update_source_last_crawled(cursor, connection, source["id"])
 
-        print(
-            f"    - Stored {len(markdown)} chars of markdown ({filtered_count} events)"
-        )
+        # Map structured JSON directly to extracted Event schema,
+        # skipping Gemini extraction entirely for this structured source
+        extracted_data = map_json_api_to_extracted(filtered)
+        extracted_event_count = len(extracted_data.get("events", []))
+
+        if extracted_event_count > 0:
+            db.update_crawl_result_extracted(
+                cursor, connection, crawl_result_id, json.dumps(extracted_data)
+            )
+            print(
+                f"    - Directly mapped {extracted_event_count} events "
+                f"from {filtered_count} source events "
+                f"(skipped Gemini extraction)"
+            )
+        else:
+            print(
+                f"    - Stored {len(markdown)} chars of markdown "
+                f"({filtered_count} events, no direct mapping)"
+            )
+
+        db.update_source_last_crawled(cursor, connection, source["id"])
         return crawl_result_id, pre_filter_data
 
     except Exception as e:
@@ -494,7 +647,7 @@ async def crawl_source(crawler, source, cursor, connection, crawl_job_id):
         # Execute crawl with timeout
         try:
             await asyncio.wait_for(crawl_urls(), timeout=crawl_timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             error_msg = f"Crawl timed out after {crawl_timeout} seconds"
             print(f"    - {error_msg}")
             # If we got partial content, still save it

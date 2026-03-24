@@ -370,7 +370,7 @@ def _parse_jsonb(value):
     if isinstance(value, str):
         try:
             return json.loads(value)
-        except TypeError, ValueError:
+        except (TypeError, ValueError):
             return None
     return None
 
@@ -589,9 +589,9 @@ def merge_extracted_events(cursor, connection, crawl_job_id=None):
                             valid_occurrences[-1]["end_date"] = datetime.strptime(
                                 str(end_date_str), "%Y-%m-%d"
                             ).date()
-                        except TypeError, ValueError:
+                        except (TypeError, ValueError):
                             pass
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
 
         if not valid_occurrences:

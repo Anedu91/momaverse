@@ -177,7 +177,7 @@ def create_schema(connection):
     cursor = connection.cursor()
 
     try:
-        with open(SCHEMA_FILE, "r") as f:
+        with open(SCHEMA_FILE) as f:
             schema_sql = f.read()
 
         cursor.execute(schema_sql)

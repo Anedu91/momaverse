@@ -1,4 +1,6 @@
 import pytest
+from pydantic import ValidationError
+
 from api.models.base import LocationType
 from api.schemas.location import (
     LocationCreate,
@@ -6,8 +8,6 @@ from api.schemas.location import (
     LocationResponse,
     LocationUpdate,
 )
-from pydantic import ValidationError
-
 from tests.schemas.helpers import (
     make_alternate_name_obj,
     make_location_obj,

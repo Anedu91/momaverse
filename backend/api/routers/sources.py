@@ -202,7 +202,8 @@ async def upsert_crawl_config(
             if "crawl_frequency" not in dump or "crawl_mode" not in dump:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="crawl_frequency and crawl_mode are required when creating a new config",
+                    detail="crawl_frequency and crawl_mode are required "
+                    "when creating a new config",
                 )
         config = CrawlConfig(
             source_id=source.id,

@@ -1,6 +1,8 @@
 """Tests for auth dependencies: password hashing, JWT, user deps."""
 
 import pytest
+from fastapi.security import HTTPAuthorizationCredentials
+
 from api.dependencies import (
     _decode_token,
     create_access_token,
@@ -10,7 +12,6 @@ from api.dependencies import (
     verify_password,
 )
 from api.models.user import User
-from fastapi.security import HTTPAuthorizationCredentials
 
 # ---------------------------------------------------------------
 # Password hashing

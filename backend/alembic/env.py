@@ -1,13 +1,12 @@
 import asyncio
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy.ext.asyncio import create_async_engine
-
-from api.config import get_settings
 
 # Import all models so that Base.metadata is fully populated
 import api.models  # noqa: F401
+from alembic import context
+from api.config import get_settings
 from api.database import Base
 
 # this is the Alembic Config object, which provides

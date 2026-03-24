@@ -1,6 +1,8 @@
 from decimal import Decimal
 
 import pytest
+from pydantic import ValidationError
+
 from api.models.base import CrawlMode, SourceType
 from api.schemas.source import (
     CrawlConfigCreate,
@@ -14,8 +16,6 @@ from api.schemas.source import (
     SourceUrlCreate,
     SourceUrlResponse,
 )
-from pydantic import ValidationError
-
 from tests.schemas.helpers import (
     make_crawl_config_obj,
     make_source_obj,

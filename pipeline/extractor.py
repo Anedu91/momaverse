@@ -14,7 +14,6 @@ import os
 import re
 from datetime import datetime
 from io import BytesIO
-from typing import Optional
 from urllib.parse import urljoin
 
 import db
@@ -56,14 +55,14 @@ class EventOccurrence(BaseModel):
     start_date: str = Field(
         description="The date of this occurrence in YYYY-MM-DD format"
     )
-    start_time: Optional[str] = Field(
+    start_time: str | None = Field(
         default=None, description="The start time (e.g., 4:00 PM)"
     )
-    end_date: Optional[str] = Field(
+    end_date: str | None = Field(
         default=None,
         description="The end date if different from start_date, in YYYY-MM-DD format",
     )
-    end_time: Optional[str] = Field(
+    end_time: str | None = Field(
         default=None, description="The end time (e.g., 7:00 PM)"
     )
 
@@ -75,7 +74,7 @@ class Event(BaseModel):
     location: str = Field(
         description="The name of the venue where the event is being held"
     )
-    sublocation: Optional[str] = Field(
+    sublocation: str | None = Field(
         default=None,
         description="Optional location within the venue (e.g., rooftop, 5th floor)",
     )
@@ -83,7 +82,7 @@ class Event(BaseModel):
         description="List of date/time occurrences for this event. Include ALL specific dates if the event repeats."
     )
     description: str = Field(description="A 1-3 sentence description of the event")
-    url: Optional[str] = Field(
+    url: str | None = Field(
         default=None, description="URL for the specific event, if available"
     )
     hashtags: list[str] = Field(
@@ -109,8 +108,8 @@ class SimpleOccurrence(BaseModel):
     """Simplified occurrence schema for first-pass extraction."""
 
     start_date: str = Field(description="YYYY-MM-DD format")
-    start_time: Optional[str] = Field(default=None, description="e.g. 8:00 PM")
-    end_time: Optional[str] = Field(default=None)
+    start_time: str | None = Field(default=None, description="e.g. 8:00 PM")
+    end_time: str | None = Field(default=None)
 
 
 class SimpleEvent(BaseModel):
@@ -119,7 +118,7 @@ class SimpleEvent(BaseModel):
     name: str
     location: str
     occurrences: list[SimpleOccurrence]
-    url: Optional[str] = None
+    url: str | None = None
 
 
 class SimpleEventList(BaseModel):
@@ -402,7 +401,7 @@ async def extract_with_vision(
 
         return response_text
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(f"    - Vision extraction timeout after {GEMINI_TIMEOUT * 2}s")
         return '{"events": []}'
     except Exception as e:
@@ -645,7 +644,7 @@ Website content:
         )
         result = json.loads(response.text.strip())
         return result.get("events", [])
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print(f"      Chunk timeout after {CHUNK_TIMEOUT}s")
         return []
     except Exception as e:

@@ -9,7 +9,6 @@ from api.schemas.crawl import (
     ExtractedEventListItem,
     ExtractedEventResponse,
 )
-
 from tests.schemas.helpers import (
     make_crawl_content_obj,
     make_crawl_job_obj,

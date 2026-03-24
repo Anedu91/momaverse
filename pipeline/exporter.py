@@ -179,7 +179,7 @@ def export_events(cursor):
                 ).date()
                 if start_date < init_limit_date:
                     is_in_init_timeframe = True
-            except ValueError, TypeError:
+            except (ValueError, TypeError):
                 pass
 
         if is_in_bbox and is_in_init_timeframe:

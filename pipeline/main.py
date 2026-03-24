@@ -136,6 +136,7 @@ async def run_pipeline(source_ids=None, limit=None):
         num_workers = 6
 
         crawl_results = []
+        extracted_results = []
 
         # Crawl JSON API sources first (fast, no browser needed)
         if json_api_sources:
@@ -157,7 +158,9 @@ async def run_pipeline(source_ids=None, limit=None):
                             )
                             if created > 0:
                                 print(f"    - Auto-created {created} new location(s)")
-                        crawl_results.append((result_id, source))
+                        # JSON API sources are directly mapped to extracted;
+                        # route them past the Gemini extraction queue.
+                        extracted_results.append((result_id, source))
                 except Exception as e:
                     print(f"    - Error crawling {source['name']}: {e}")
                 finally:
@@ -240,14 +243,15 @@ async def run_pipeline(source_ids=None, limit=None):
                 for results in worker_results:
                     crawl_results.extend(results)
 
-        print(f"\nCrawled {len(crawl_results)} source(s)\n")
+        total_crawled = len(crawl_results) + len(extracted_results)
+        print(
+            f"\nCrawled {total_crawled} source(s) ({len(extracted_results)} pre-extracted via JSON API)\n"
+        )
 
         # STEP 3: Extract events using Gemini AI
         print(f"{'=' * 60}")
         print("STEP 3: Extracting Events with Gemini AI")
         print(f"{'=' * 60}")
-
-        extracted_results = []
 
         # Build list of all items to extract
         extraction_queue = []
@@ -424,7 +428,7 @@ async def run_pipeline(source_ids=None, limit=None):
 
         # Show summary
         print("Summary:")
-        print(f"  - Sources crawled: {len(crawl_results)}")
+        print(f"  - Sources crawled: {len(crawl_results) + len(json_api_sources)}")
         if incomplete_crawled:
             print(f"  - Resumed extractions: {len(incomplete_crawled)}")
         if incomplete_extracted:

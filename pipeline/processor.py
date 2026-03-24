@@ -333,7 +333,7 @@ def filter_by_date(row_dict, current_date, future_limit_date):
 
         if (effective_end_date - start_date).days > 400:
             return False
-    except ValueError, TypeError:
+    except (ValueError, TypeError):
         return False
     return True
 

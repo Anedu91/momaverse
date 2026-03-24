@@ -2,9 +2,10 @@
 
 import pytest
 import pytest_asyncio
-from api.middleware.response_wrapper import ResponseWrapperMiddleware
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+
+from api.middleware.response_wrapper import ResponseWrapperMiddleware
 
 
 def _make_app() -> FastAPI:

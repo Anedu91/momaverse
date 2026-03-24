@@ -3,8 +3,9 @@
 from collections.abc import AsyncGenerator
 
 import pytest_asyncio
-from api.models.user import User
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.models.user import User
 
 
 @pytest_asyncio.fixture(autouse=True)
