@@ -16,6 +16,7 @@ class Settings(BaseSettings):
 
     sync_api_key: str = "changeme"
     secret_key: str = "changeme-secret"
+    geoapify_api_key: str = ""
 
     def model_post_init(self, __context: object) -> None:
         if not self.db_user:

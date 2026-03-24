@@ -116,3 +116,37 @@ async def get_optional_user(
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 OptionalUserDep = Annotated[User | None, Depends(get_optional_user)]
+
+
+async def get_admin_user(
+    user: Annotated[User, Depends(get_current_user)],
+) -> User:
+    """Require the current user to be an admin. Raises 403 if not."""
+    if not user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
+        )
+    return user
+
+
+AdminUserDep = Annotated[User, Depends(get_admin_user)]
+
+
+# ---------------------------------------------------------------------------
+# Geocoding
+# ---------------------------------------------------------------------------
+
+
+async def get_geoapify_key() -> str:
+    """Return the Geoapify API key or 503 if not configured."""
+    key = get_settings().geoapify_api_key
+    if not key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Geocoding service not configured",
+        )
+    return key
+
+
+GeoapifyKeyDep = Annotated[str, Depends(get_geoapify_key)]
