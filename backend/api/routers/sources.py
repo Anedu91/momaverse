@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query, Response, status
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
 from api.dependencies import CurrentUserDep, SessionDep
@@ -109,10 +110,12 @@ async def create_source(
 ) -> SourceDetailResponse:
     # Check for duplicate URLs within the request
     url_strings = [u.url for u in data.urls]
-    if len(url_strings) != len(set(url_strings)):
+    seen: set[str] = set()
+    dupes = [u for u in url_strings if u in seen or seen.add(u)]  # type: ignore[func-returns-value]
+    if dupes:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Duplicate URLs in request",
+            detail=f"Duplicate URLs in request: {', '.join(dupes)}",
         )
     await _check_duplicate_urls(db, url_strings)
 
@@ -142,7 +145,14 @@ async def create_source(
         )
         db.add(config)
 
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="One or more URLs already exist",
+        )
     source = await _refresh_source(db, source.id)
     return SourceDetailResponse.model_validate(source)
 
@@ -240,7 +250,14 @@ async def add_source_url(
         sort_order=data.sort_order,
     )
     db.add(url)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"URL already exists: {data.url}",
+        )
     await db.refresh(url)
     return SourceUrlResponse.model_validate(url)
 

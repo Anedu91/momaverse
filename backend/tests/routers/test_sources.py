@@ -607,6 +607,44 @@ class TestDuplicateSourceUrls:
         # Assert
         assert resp.status_code == 409
         assert "Duplicate URLs in request" in resp.json()["detail"]
+        assert "https://same-url.com" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_integrity_error_returns_409_on_race_condition(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_source: Source,
+    ) -> None:
+        """Simulate a race: insert a URL directly in DB, then try via API.
+
+        The Python-level check won't catch it because we bypass
+        _check_duplicate_urls by inserting after the check would run.
+        The DB unique constraint fires and the IntegrityError handler
+        must return 409, not 500.
+        """
+        # Arrange — insert URL directly so the Python check can't see it
+        # (simulates another request committing between check and commit)
+        db_session.add(
+            SourceUrl(
+                source_id=sample_source.id,
+                url="https://race-condition.com",
+                sort_order=0,
+            )
+        )
+        await db_session.commit()
+
+        # Act — try to create a source with the same URL via the API
+        payload = {
+            "name": "Racing Source",
+            "type": "crawler",
+            "urls": [{"url": "https://race-condition.com"}],
+        }
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert — should be 409, not 500
+        assert resp.status_code == 409
 
     @pytest.mark.asyncio
     async def test_duplicate_url_error_message_contains_url(

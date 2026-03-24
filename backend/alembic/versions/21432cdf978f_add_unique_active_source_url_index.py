@@ -20,20 +20,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    # Soft-delete duplicate active source_urls, keeping the one with the lowest id
-    op.execute(sa.text("""
-        UPDATE source_urls
-        SET deleted_at = NOW()
-        WHERE id IN (
-            SELECT id FROM (
-                SELECT id,
-                       ROW_NUMBER() OVER (PARTITION BY url ORDER BY id) AS rn
-                FROM source_urls
-                WHERE deleted_at IS NULL
-            ) ranked
-            WHERE rn > 1
-        )
-    """))
     op.create_index('uq_source_urls_url_active', 'source_urls', ['url'], unique=True, postgresql_where=sa.text('deleted_at IS NULL'))
 
 
