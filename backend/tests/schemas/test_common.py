@@ -1,5 +1,4 @@
 from api.schemas.common import PaginatedResponse, TagResponse
-
 from tests.schemas.helpers import make_tag_obj
 
 

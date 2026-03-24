@@ -1,8 +1,8 @@
 import pytest
-from api.models.base import TagRuleType
-from api.schemas.tag_rule import TagRuleCreate, TagRuleResponse, TagRuleUpdate
 from pydantic import ValidationError
 
+from api.models.base import TagRuleType
+from api.schemas.tag_rule import TagRuleCreate, TagRuleResponse, TagRuleUpdate
 from tests.schemas.helpers import make_tag_rule_obj
 
 # ---------------------------------------------------------------------------

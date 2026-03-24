@@ -5,6 +5,10 @@ from datetime import date, timedelta
 
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.database import get_db
 from api.dependencies import create_access_token, hash_password
 from api.models.event import Event, EventOccurrence, EventTag, EventUrl
@@ -12,9 +16,6 @@ from api.models.location import Location
 from api.models.tag import Tag
 from api.models.user import User
 from api.routers.events import router
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 PREFIX = "/api/v1/events"
 

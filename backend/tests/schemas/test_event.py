@@ -2,6 +2,8 @@ from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from pydantic import ValidationError
+
 from api.models.base import EventStatus
 from api.schemas.event import (
     EventCreate,
@@ -9,8 +11,6 @@ from api.schemas.event import (
     EventResponse,
     OccurrenceSchema,
 )
-from pydantic import ValidationError
-
 from tests.schemas.helpers import make_event_obj, make_tag_obj
 
 # ---------------------------------------------------------------------------

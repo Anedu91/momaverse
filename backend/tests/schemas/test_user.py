@@ -1,7 +1,7 @@
 import pytest
-from api.schemas.user import UserCreate, UserLogin, UserResponse
 from pydantic import ValidationError
 
+from api.schemas.user import UserCreate, UserLogin, UserResponse
 from tests.schemas.helpers import make_user_obj
 
 # ---------------------------------------------------------------------------

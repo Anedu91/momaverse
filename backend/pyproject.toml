@@ -42,6 +42,15 @@ asyncio_default_test_loop_scope = "session"
 target-version = "py312"
 extend-exclude = ["alembic/versions"]
 
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade (modern Python syntax)
+]
+
 [tool.ruff.lint.per-file-ignores]
 # SQLAlchemy models use string forward references resolved at runtime
 "api/models/*.py" = ["F821"]

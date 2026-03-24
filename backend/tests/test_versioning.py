@@ -6,7 +6,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.models.test_models import SoftDeleteItem
 
-
 # ============================================================================
 # SoftDeleteMixin tests
 # ============================================================================

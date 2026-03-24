@@ -7,7 +7,7 @@ Each edit is stored as an immutable log entry with a UUID for global uniqueness.
 
 import uuid
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class EditLogger:
@@ -70,7 +70,7 @@ class EditLogger:
         """Generate a UUID for the edit."""
         return str(uuid.uuid4())
 
-    def _serialize_value(self, value: Any) -> Optional[str]:
+    def _serialize_value(self, value: Any) -> str | None:
         """Convert a value to string for storage."""
         if value is None:
             return None
@@ -86,7 +86,7 @@ class EditLogger:
         self,
         table_name: str,
         record_id: int,
-        field_name: Optional[str],
+        field_name: str | None,
         action: str,
         old_value: Any,
         new_value: Any,
@@ -121,7 +121,7 @@ class EditLogger:
         return self.cursor.lastrowid
 
     def log_insert(
-        self, table_name: str, record_id: int, record_data: Dict[str, Any]
+        self, table_name: str, record_id: int, record_data: dict[str, Any]
     ) -> int:
         """
         Log an INSERT operation.
@@ -187,9 +187,9 @@ class EditLogger:
         self,
         table_name: str,
         record_id: int,
-        old_record: Dict[str, Any],
-        new_record: Dict[str, Any],
-    ) -> List[int]:
+        old_record: dict[str, Any],
+        new_record: dict[str, Any],
+    ) -> list[int]:
         """
         Log UPDATE operations for multiple fields by comparing old and new records.
 
@@ -215,7 +215,7 @@ class EditLogger:
         return edit_ids
 
     def log_delete(
-        self, table_name: str, record_id: int, record_data: Dict[str, Any]
+        self, table_name: str, record_id: int, record_data: dict[str, Any]
     ) -> int:
         """
         Log a DELETE operation.
@@ -242,7 +242,7 @@ class EditLogger:
 
     def get_edits_since(
         self, since_id: int = 0, source: str = None, limit: int = 1000
-    ) -> List[Dict]:
+    ) -> list[dict]:
         """
         Get edits since a given edit ID.
 
@@ -302,7 +302,7 @@ class EditLogger:
 
         return edits
 
-    def get_record_history(self, table_name: str, record_id: int) -> List[Dict]:
+    def get_record_history(self, table_name: str, record_id: int) -> list[dict]:
         """
         Get edit history for a specific record.
 
@@ -349,7 +349,7 @@ class EditLogger:
 
         return edits
 
-    def apply_edit(self, edit: Dict) -> bool:
+    def apply_edit(self, edit: dict) -> bool:
         """
         Apply an edit from another source to the local database.
 

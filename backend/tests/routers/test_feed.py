@@ -5,14 +5,15 @@ from datetime import date, timedelta
 
 import pytest
 import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from api.database import get_db
 from api.models.base import EventStatus
 from api.models.event import Event, EventOccurrence
 from api.models.location import Location
 from api.routers.feed import router
-from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _make_app(db_session: AsyncSession) -> FastAPI:
