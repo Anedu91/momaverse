@@ -83,7 +83,7 @@ def filter_by_date_window(events_dict, days_ahead=30):
                             try:
                                 dt = datetime.strptime(proxima, "%Y-%m-%d %H:%M")
                                 dates_found.append(dt)
-                            except TypeError, ValueError:
+                            except (TypeError, ValueError):
                                 pass
 
         if not dates_found:
@@ -199,7 +199,7 @@ def map_json_api_to_extracted(events_dict):
                                 try:
                                     dt = datetime.strptime(parts[1], "%H:%M")
                                     start_time = dt.strftime("%-I:%M %p")
-                                except ValueError, TypeError:
+                                except (ValueError, TypeError):
                                     start_time = parts[1]
                         elif hora:
                             # No proxima_fecha but has hora — skip, no date

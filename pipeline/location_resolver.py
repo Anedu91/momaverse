@@ -71,7 +71,7 @@ def resolve_locations(raw_json_data, source_id, cursor, connection):
             try:
                 lat = float(lugar.get("lat", 0))
                 lng = float(lugar.get("lng", 0))
-            except TypeError, ValueError:
+            except (TypeError, ValueError):
                 continue
 
             if lat == 0.0 or lng == 0.0:
