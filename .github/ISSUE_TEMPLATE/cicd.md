@@ -29,7 +29,7 @@ Example: "Set up a GitHub Actions workflow that runs pytest on every PR targetin
 <!-- REQUIRED: What infrastructure/services are involved?
 - GitHub Actions / other CI provider
 - Docker / container registry
-- Deployment target (FTP, cloud, VPS)
+- Deployment target (cloud, VPS)
 - Secrets/env vars needed (name only, never values)
 -->
 

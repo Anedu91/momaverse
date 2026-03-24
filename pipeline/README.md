@@ -10,8 +10,6 @@ The `main.py` script orchestrates the following steps:
 2. **Extract** - Use Gemini AI to extract structured event data from crawled content
 3. **Process** - Parse extracted events, enrich with location data, store in `crawl_events`
 4. **Merge** - Deduplicate crawl_events into final `events` table
-5. **Export** - Generate JSON files from events table for the website
-6. **Upload** - Push JSON files to FTP server
 
 ## Module Structure
 
@@ -24,7 +22,6 @@ pipeline/
 ├── processor.py         # Markdown parsing, text utilities, and enrichment
 ├── merger.py            # Event deduplication
 ├── exporter.py          # JSON export
-├── uploader.py          # FTP upload
 └── tests/
     └── test_processor.py
 ```
@@ -74,12 +71,6 @@ FOMO_ENV=local
 GEMINI_API_KEY="your-api-key"
 GEMINI_MODEL="gemini-3-flash-preview"
 GEMINI_TIMEOUT=120
-
-# FTP Upload
-FTP_HOST="your-ftp-server.com"
-FTP_USER="your-username"
-FTP_PASSWORD="your-password"
-FTP_REMOTE_DIR="data"
 ```
 
 Database credentials are in `db.py` based on `FOMO_ENV`.
@@ -120,10 +111,6 @@ websites table
 [Process] → crawl_events + occurrences + tags
      ↓
 [Merge] → events + occurrences + urls + tags + sources
-     ↓
-[Export] → events.init.json, events.full.json
-     ↓
-[Upload] → FTP server
 ```
 
 ## Deduplication
@@ -152,6 +139,3 @@ Duplicates are merged: URLs combined, shorter name kept, sources tracked.
 - Ensure `GEMINI_API_KEY` is set
 - Check API quota/limits
 
-### Upload Issues
-- Verify FTP credentials
-- Use `use_tls=True` if server requires SSL

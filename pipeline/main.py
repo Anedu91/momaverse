@@ -7,7 +7,6 @@ Orchestrates the complete event processing workflow:
 2. Extract - Use Gemini AI to extract structured event data
 3. Process - Parse responses, enrich with location data, store in extracted_events
 4. Merge - Deduplicate extracted_events into final events table
-5. Archive - Hide events no longer found in recent crawls
 
 Usage:
     python main.py                     # Process all sources due for crawling
@@ -27,7 +26,6 @@ import extractor
 import location_resolver
 import merger
 import processor
-import uploader
 from crawl4ai import AsyncWebCrawler
 
 
@@ -419,19 +417,6 @@ async def run_pipeline(source_ids=None, limit=None):
 
         new_events, merged_events = merger.merge_extracted_events(cursor, connection)
         print(f"\nMerged events ({new_events} new, {merged_events} merged)\n")
-
-        # STEP 6: Upload data files
-        print(f"{'=' * 60}")
-        print("STEP 6: Uploading Data")
-        print(f"{'=' * 60}")
-
-        success = uploader.upload(use_tls=False)
-
-        if success:
-            print("\nData upload completed\n")
-        else:
-            print("\nData upload failed\n")
-            return False
 
         print(f"{'=' * 60}")
         print("PIPELINE COMPLETED SUCCESSFULLY")
