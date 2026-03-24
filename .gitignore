@@ -30,9 +30,6 @@ dist/
 src/data/events.*.json
 src/data/locations.*.json
 
-# Upload state tracking
-scripts/upload_state.json
-
 # PHP config with database credentials
 src/api/config.php
 
@@ -66,8 +63,6 @@ infrastructure/*.tfstate*
 *.swo
 *~
 
-# FTP credentials backup
-.ftpconfig
 
 # ===================
 # iOS / Xcode
