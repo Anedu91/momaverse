@@ -342,19 +342,26 @@ document.addEventListener('DOMContentLoaded', () => {
          */
         async _loadFullData(urlParams) {
             try {
-                // Load full dataset and related tags in parallel
-                const [fullEventData, fullLocationData] = await Promise.all([
-                    DataManager.fetchData(this.config.EVENT_FULL_URL),
-                    DataManager.fetchData(this.config.LOCATIONS_FULL_URL),
-                    // Related tags deferred from Phase 1 — load in background
-                    RelatedTagsManager.init({ relatedTagsUrl: this.config.RELATED_TAGS_URL })
-                        .then(() => TagColorManager.setRelatedTagsCallback(
-                            (tag) => RelatedTagsManager.getRelatedTags(tag)
-                        ))
-                ]);
+                // Skip full data fetch if init and full URLs are identical (same API endpoint)
+                const skipFullFetch = this.config.EVENT_FULL_URL === this.config.EVENT_INIT_URL
+                    && this.config.LOCATIONS_FULL_URL === this.config.LOCATIONS_INIT_URL;
 
-                // Merge and process the full dataset
-                DataManager.processFullData(fullEventData, fullLocationData, this.state, this.config);
+                // Always load related tags (deferred from Phase 1)
+                await RelatedTagsManager.init({ relatedTagsUrl: this.config.RELATED_TAGS_URL });
+                TagColorManager.setRelatedTagsCallback(
+                    (tag) => RelatedTagsManager.getRelatedTags(tag)
+                );
+
+                if (!skipFullFetch) {
+                    const [fullEventData, fullLocationData] = await Promise.all([
+                        DataManager.fetchData(this.config.EVENT_FULL_URL),
+                        DataManager.fetchData(this.config.LOCATIONS_FULL_URL),
+                    ]);
+
+                    // Merge and process the full dataset
+                    DataManager.processFullData(fullEventData, fullLocationData, this.state, this.config);
+                }
+
                 DataManager.calculateTagFrequencies(this.state);
                 DataManager.processTagHierarchy(this.state, this.config);
                 DataManager.buildSearchIndex(this.state);
