@@ -474,6 +474,37 @@ class TestSoftDeleteSource:
         assert url.deleted_at is not None
 
     @pytest.mark.asyncio
+    async def test_soft_deleted_url_allows_reuse(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+    ) -> None:
+        # Arrange — create source with URL, then soft-delete the URL
+        s1 = Source(name="Original Source", type="crawler")
+        db_session.add(s1)
+        await db_session.flush()
+        url = SourceUrl(source_id=s1.id, url="https://reuse-me.com", sort_order=0)
+        db_session.add(url)
+        await db_session.flush()
+
+        resp = await client.delete(
+            f"{PREFIX}/{s1.id}/urls/{url.id}", headers=auth_headers
+        )
+        assert resp.status_code == 204
+
+        # Act — create new source with the same URL
+        payload = {
+            "name": "Reuse Source",
+            "type": "crawler",
+            "urls": [{"url": "https://reuse-me.com"}],
+        }
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 201
+
+    @pytest.mark.asyncio
     async def test_delete_already_deleted_source_returns_404(
         self,
         client: AsyncClient,
@@ -489,3 +520,108 @@ class TestSoftDeleteSource:
 
         # Assert
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Duplicate URL prevention
+# ---------------------------------------------------------------------------
+
+
+class TestDuplicateSourceUrls:
+    @pytest.mark.asyncio
+    async def test_create_source_rejects_duplicate_url(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_source_with_url: Source,
+    ) -> None:
+        # Act — try to create another source with the same URL
+        payload = {
+            "name": "Duplicate Source",
+            "type": "crawler",
+            "urls": [{"url": "https://example.com"}],
+        }
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_add_url_rejects_duplicate_url(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        db_session: AsyncSession,
+        sample_source_with_url: Source,
+    ) -> None:
+        # Arrange — create a second source
+        s2 = Source(name="Second Source", type="crawler")
+        db_session.add(s2)
+        await db_session.flush()
+
+        # Act — try to add the same URL to a different source
+        payload = {"url": "https://example.com"}
+        resp = await client.post(
+            f"{PREFIX}/{s2.id}/urls", json=payload, headers=auth_headers
+        )
+
+        # Assert
+        assert resp.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_add_url_rejects_duplicate_within_same_source(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_source_with_url: Source,
+    ) -> None:
+        # Act — try to add the same URL to the same source
+        payload = {"url": "https://example.com"}
+        resp = await client.post(
+            f"{PREFIX}/{sample_source_with_url.id}/urls",
+            json=payload,
+            headers=auth_headers,
+        )
+
+        # Assert
+        assert resp.status_code == 409
+
+    @pytest.mark.asyncio
+    async def test_create_source_rejects_duplicate_urls_within_request(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+    ) -> None:
+        # Act — send two identical URLs in one create request
+        payload = {
+            "name": "Double URL Source",
+            "type": "crawler",
+            "urls": [
+                {"url": "https://same-url.com"},
+                {"url": "https://same-url.com"},
+            ],
+        }
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 409
+        assert "Duplicate URLs in request" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_duplicate_url_error_message_contains_url(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        sample_source_with_url: Source,
+    ) -> None:
+        # Act
+        payload = {
+            "name": "Dup Source",
+            "type": "crawler",
+            "urls": [{"url": "https://example.com"}],
+        }
+        resp = await client.post(f"{PREFIX}/", json=payload, headers=auth_headers)
+
+        # Assert
+        assert resp.status_code == 409
+        assert "https://example.com" in resp.json()["detail"]

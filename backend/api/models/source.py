@@ -6,10 +6,12 @@ from sqlalchemy import (
     Date,
     Enum,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -39,6 +41,14 @@ class Source(SoftDeleteMixin, TimestampMixin, Base):
 
 class SourceUrl(SoftDeleteMixin, Base):
     __tablename__ = "source_urls"
+    __table_args__ = (
+        Index(
+            "uq_source_urls_url_active",
+            "url",
+            unique=True,
+            postgresql_where=text("deleted_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"))

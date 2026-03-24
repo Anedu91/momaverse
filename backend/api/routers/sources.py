@@ -37,6 +37,19 @@ async def _get_source_or_404(db: SessionDep, source_id: int) -> Source:
     return source
 
 
+async def _check_duplicate_urls(db: SessionDep, urls: list[str]) -> None:
+    """Raise 409 if any of the given URLs already exist in active source_urls."""
+    if not urls:
+        return
+    stmt = select(SourceUrl.url).where(SourceUrl.active(), SourceUrl.url.in_(urls))
+    existing = (await db.execute(stmt)).scalars().all()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"URL(s) already exist: {', '.join(existing)}",
+        )
+
+
 async def _refresh_source(db: SessionDep, source_id: int) -> Source:
     stmt = (
         select(Source)
@@ -94,6 +107,15 @@ async def create_source(
     db: SessionDep,
     user: CurrentUserDep,
 ) -> SourceDetailResponse:
+    # Check for duplicate URLs within the request
+    url_strings = [u.url for u in data.urls]
+    if len(url_strings) != len(set(url_strings)):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Duplicate URLs in request",
+        )
+    await _check_duplicate_urls(db, url_strings)
+
     source = Source(
         name=data.name,
         type=data.type,
@@ -207,6 +229,8 @@ async def add_source_url(
 ) -> SourceUrlResponse:
     # Verify source exists
     await _get_source_or_404(db, source_id)
+
+    await _check_duplicate_urls(db, [data.url])
 
     url = SourceUrl(
         source_id=source_id,
