@@ -8,7 +8,9 @@ from api.config import get_settings
 settings = get_settings()
 
 engine = create_async_engine(settings.database_url)
-AsyncSessionLocal = async_sessionmaker(engine, class_=AsyncSession)
+AsyncSessionLocal = async_sessionmaker(
+    engine, class_=AsyncSession, expire_on_commit=False
+)
 
 
 class Base(DeclarativeBase):

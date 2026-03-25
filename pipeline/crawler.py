@@ -346,15 +346,16 @@ async def crawl_json_api(source, cursor, connection, crawl_job_id):
 
         raw_text = response.text
 
-        # Strip BOM if present
+        # Try plain JSON first, fall back to JSONP stripping.
+        # Strip BOM after each step — it can appear at the start of
+        # the response OR inside a JSONP wrapper (e.g. `callback(\ufeff{…})`).
         raw_text = raw_text.lstrip("\ufeff")
-
-        # Try plain JSON first, fall back to JSONP stripping
         jsonp_callback = config.get("jsonp_callback")
         try:
             data = json.loads(raw_text)
         except json.JSONDecodeError:
             raw_text = strip_jsonp(raw_text, jsonp_callback)
+            raw_text = raw_text.lstrip("\ufeff")
             data = json.loads(raw_text)
 
         # Navigate data_path (e.g., 'espectaculos')

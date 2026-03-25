@@ -47,7 +47,6 @@ async def create_tag_rule(
     )
     db.add(rule)
     await db.commit()
-    await db.refresh(rule)
     return TagRuleResponse.model_validate(rule)
 
 
@@ -69,7 +68,6 @@ async def update_tag_rule(
         setattr(rule, field, value)
 
     await db.commit()
-    await db.refresh(rule)
     return TagRuleResponse.model_validate(rule)
 
 

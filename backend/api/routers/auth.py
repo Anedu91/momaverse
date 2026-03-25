@@ -36,7 +36,6 @@ async def register(data: UserCreate, db: SessionDep) -> AuthResponse:
     )
     db.add(user)
     await db.commit()
-    await db.refresh(user)
 
     token = create_access_token(user.id)
     return AuthResponse(token=token, user=UserResponse.model_validate(user))
@@ -59,7 +58,6 @@ async def login(data: UserLogin, db: SessionDep) -> AuthResponse:
 
     user.last_login_at = func.now()
     await db.commit()
-    await db.refresh(user)
 
     token = create_access_token(user.id)
     return AuthResponse(token=token, user=UserResponse.model_validate(user))
