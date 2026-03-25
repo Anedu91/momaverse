@@ -260,7 +260,6 @@ async def add_source_url(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"URL already exists: {data.url}",
         )
-    await db.refresh(url)
     return SourceUrlResponse.model_validate(url)
 
 
