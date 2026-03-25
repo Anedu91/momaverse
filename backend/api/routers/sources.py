@@ -145,6 +145,8 @@ async def create_source(
         )
         db.add(config)
 
+    source_id = source.id  # capture before commit expires attributes
+
     try:
         await db.commit()
     except IntegrityError:
@@ -153,7 +155,7 @@ async def create_source(
             status_code=status.HTTP_409_CONFLICT,
             detail="One or more URLs already exist",
         )
-    source = await _refresh_source(db, source.id)
+    source = await _refresh_source(db, source_id)
     return SourceDetailResponse.model_validate(source)
 
 
@@ -173,7 +175,7 @@ async def update_source(
         setattr(source, field, value)
 
     await db.commit()
-    source = await _refresh_source(db, source.id)
+    source = await _refresh_source(db, source_id)
     return SourceDetailResponse.model_validate(source)
 
 
@@ -222,7 +224,7 @@ async def upsert_crawl_config(
         db.add(config)
 
     await db.commit()
-    source = await _refresh_source(db, source.id)
+    source = await _refresh_source(db, source_id)
     assert source.crawl_config is not None
     return CrawlConfigResponse.model_validate(source.crawl_config)
 

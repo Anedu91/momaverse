@@ -402,8 +402,10 @@ async def create_location(
         tag = await get_or_create_tag(db, tag_name)
         db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
+    location_id = location.id  # capture before commit expires attributes
+
     await db.commit()
-    location = await _refresh_location(db, location.id)
+    location = await _refresh_location(db, location_id)
     return LocationDetailResponse.model_validate(location)
 
 
@@ -488,7 +490,7 @@ async def update_location(
             db.add(LocationTag(location_id=location.id, tag_id=tag.id))
 
     await db.commit()
-    location = await _refresh_location(db, location.id)
+    location = await _refresh_location(db, location_id)
     return LocationDetailResponse.model_validate(location)
 
 

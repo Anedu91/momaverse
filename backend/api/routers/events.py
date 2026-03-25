@@ -201,8 +201,10 @@ async def create_event(
         tag = await get_or_create_tag(db, tag_name)
         db.add(EventTag(event_id=event.id, tag_id=tag.id))
 
+    event_id = event.id  # capture before commit expires attributes
+
     await db.commit()
-    event = await _refresh_event(db, event.id)
+    event = await _refresh_event(db, event_id)
     return EventDetailResponse.model_validate(event)
 
 
