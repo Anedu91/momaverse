@@ -508,12 +508,14 @@ async def crawl_source(crawler, source, cursor, connection, crawl_job_id):
                 max_pages=max_pages,
             )
         else:
-            deep_crawl_strategy = BestFirstCrawlingStrategy(max_depth=0)
+            deep_crawl_strategy = None
 
         # Get per-source crawl settings (with defaults)
         delay_seconds = source.get("delay_before_return_html") or 5
         filter_threshold = source.get("content_filter_threshold")
-        scan_full_page = source.get("scan_full_page", True)
+        scan_full_page = source.get("scan_full_page")
+        if scan_full_page is None:
+            scan_full_page = True
         remove_overlays = source.get("remove_overlay_elements", False)
         scroll_delay = source.get("scroll_delay") or 0.2
         crawl_timeout = source.get("crawl_timeout") or DEFAULT_CRAWL_TIMEOUT
@@ -595,7 +597,11 @@ async def crawl_source(crawler, source, cursor, connection, crawl_job_id):
                 url_content = ""
                 page_count = 0
 
-                for result in await crawler.arun(url=url, config=url_config):
+                arun_result = await crawler.arun(url=url, config=url_config)
+                print(
+                    f"    - arun returned: type={type(arun_result).__name__}, len={len(arun_result) if hasattr(arun_result, '__len__') else 'N/A'}"
+                )
+                for result in arun_result:
                     page_count += 1
                     # Debug: show what we received
                     html_len = len(result.html) if result and result.html else 0
