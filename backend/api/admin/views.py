@@ -1,6 +1,8 @@
 """SQLAdmin ModelAdmin views for all Momaverse models."""
 
 from sqladmin import ModelView
+from sqlalchemy import Select, func, select
+from starlette.requests import Request
 
 from api.models.crawl import CrawlContent, CrawlJob, CrawlResult, ExtractedEvent
 from api.models.event import Event, EventOccurrence, EventSource
@@ -21,6 +23,15 @@ class LocationAdmin(ModelView, model=Location):
     column_list = ["id", "name", "address", "lat", "lng", "emoji", "type"]
     column_searchable_list = ["name"]
 
+    def list_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Location).where(Location.active())
+
+    def count_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(func.count(Location.id)).where(Location.active())
+
+    def details_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Location).where(Location.active())
+
 
 class SourceAdmin(ModelView, model=Source):
     name = "Source"
@@ -35,6 +46,15 @@ class SourceAdmin(ModelView, model=Source):
     ]
     column_searchable_list = ["name"]
 
+    def list_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Source).where(Source.active())
+
+    def count_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(func.count(Source.id)).where(Source.active())
+
+    def details_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Source).where(Source.active())
+
 
 class EventAdmin(ModelView, model=Event):
     name = "Event"
@@ -48,6 +68,15 @@ class EventAdmin(ModelView, model=Event):
         "status",
     ]
     column_searchable_list = ["name"]
+
+    def list_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Event).where(Event.active())
+
+    def count_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(func.count(Event.id)).where(Event.active())
+
+    def details_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(Event).where(Event.active())
 
 
 class TagAdmin(ModelView, model=Tag):
@@ -129,6 +158,15 @@ class TagRuleAdmin(ModelView, model=TagRule):
     name_plural = "Tag Rules"
     icon = "fa-solid fa-gavel"
     column_list = ["id", "rule_type", "pattern", "replacement"]
+
+    def list_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(TagRule).where(TagRule.active())
+
+    def count_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(func.count(TagRule.id)).where(TagRule.active())
+
+    def details_query(self, request: Request) -> Select:  # type: ignore[type-arg]
+        return select(TagRule).where(TagRule.active())
 
 
 class EventOccurrenceAdmin(ModelView, model=EventOccurrence):
