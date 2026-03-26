@@ -124,13 +124,6 @@ document.addEventListener('DOMContentLoaded', () => {
             MAP_INITIAL_VIEW: [-34.6083, -58.4000],
             MAP_INITIAL_ZOOM: 13,
             MAP_USER_LOCATION_ZOOM: 14,
-            // Buenos Aires metro area bounds for geolocation validation
-            CITY_BOUNDS: {
-                latMin: -34.75,
-                latMax: -34.50,
-                lngMin: -58.60,
-                lngMax: -58.28
-            },
             MAP_STYLE_DARK: 'data/map-style-dark.json?v=8',
             MAP_STYLE_LIGHT: 'data/map-style-light.json?v=8',
             MAP_ATTRIBUTION: '© <a href="https://protomaps.com">Protomaps</a> © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
@@ -593,11 +586,6 @@ document.addEventListener('DOMContentLoaded', () => {
          * @returns {boolean} True if within city bounds
          * @memberof App
          */
-        isWithinCityBounds(lat, lng) {
-            const bounds = this.config.CITY_BOUNDS;
-            return lat >= bounds.latMin && lat <= bounds.latMax &&
-                   lng >= bounds.lngMin && lng <= bounds.lngMax;
-        },
 
         /**
          * Get user's current location via Geolocation API
@@ -622,11 +610,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
 
-                // Only use location if within city bounds
-                if (this.isWithinCityBounds(lat, lng)) {
-                    return { lat, lng };
-                }
-                return null;
+                return { lat, lng };
             } catch (error) {
                 // Geolocation denied or failed - silently fall back to default
                 return null;
@@ -697,10 +681,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 center: [initialView[1], initialView[0]], // MapLibre uses [lng, lat]
                 zoom: initialZoom,
                 maxZoom: this.config.MAP_MAX_ZOOM,
-                maxBounds: [
-                    [this.config.CITY_BOUNDS.lngMin, this.config.CITY_BOUNDS.latMin],
-                    [this.config.CITY_BOUNDS.lngMax, this.config.CITY_BOUNDS.latMax]
-                ],
                 attributionControl: false,
                 dragPan: false // Disable initially, re-enable without inertia below
             });
