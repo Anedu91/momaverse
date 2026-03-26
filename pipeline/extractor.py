@@ -12,8 +12,10 @@ import base64
 import json
 import os
 import re
+from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
+from typing import Any
 from urllib.parse import urljoin
 
 import db
@@ -42,6 +44,87 @@ except ImportError:
     GEMINI_API_KEY = None
     GEMINI_MODEL = None
     GEMINI_TIMEOUT = 120
+
+
+# =============================================================================
+# Token Usage Tracking
+# =============================================================================
+
+# Gemini 2.5 Flash pricing (per token)
+PRICE_PER_INPUT_TOKEN = 0.10 / 1_000_000  # $0.10 per 1M tokens
+PRICE_PER_OUTPUT_TOKEN = 0.40 / 1_000_000  # $0.40 per 1M tokens (includes thinking)
+
+
+@dataclass
+class TokenTracker:
+    """Accumulates token usage across multiple Gemini API calls."""
+
+    input_tokens: int = 0
+    output_tokens: int = 0
+    thinking_tokens: int = 0
+    api_calls: int = 0
+    call_details: list[dict[str, Any]] = field(default_factory=list)
+
+    def track(self, response, label: str = ""):
+        """Extract and accumulate token usage from a Gemini response."""
+        self.api_calls += 1
+        usage = getattr(response, "usage_metadata", None)
+        if not usage:
+            return
+        input_t = getattr(usage, "prompt_token_count", 0) or 0
+        output_t = getattr(usage, "candidates_token_count", 0) or 0
+        thinking_t = getattr(usage, "thoughts_token_count", 0) or 0
+        self.input_tokens += input_t
+        self.output_tokens += output_t
+        self.thinking_tokens += thinking_t
+        if label:
+            self.call_details.append(
+                {
+                    "label": label,
+                    "input": input_t,
+                    "output": output_t,
+                    "thinking": thinking_t,
+                }
+            )
+
+    @property
+    def total_tokens(self):
+        return self.input_tokens + self.output_tokens
+
+    @property
+    def input_cost(self):
+        return self.input_tokens * PRICE_PER_INPUT_TOKEN
+
+    @property
+    def output_cost(self):
+        return self.output_tokens * PRICE_PER_OUTPUT_TOKEN
+
+    @property
+    def total_cost(self):
+        return self.input_cost + self.output_cost
+
+    def merge(self, other: "TokenTracker"):
+        """Merge another tracker's usage into this one."""
+        self.input_tokens += other.input_tokens
+        self.output_tokens += other.output_tokens
+        self.thinking_tokens += other.thinking_tokens
+        self.api_calls += other.api_calls
+        self.call_details.extend(other.call_details)
+
+    def summary(self) -> str:
+        """Return a formatted summary string."""
+        lines = [
+            f"  API calls: {self.api_calls}",
+            f"  Input tokens:    {self.input_tokens:>10,}  (${self.input_cost:.4f})",
+            f"  Output tokens:   {self.output_tokens:>10,}  (${self.output_cost:.4f})",
+        ]
+        if self.thinking_tokens:
+            lines.append(
+                f"  Thinking tokens: {self.thinking_tokens:>10,}  (included in output cost)"
+            )
+        lines.append(f"  Total tokens:    {self.total_tokens:>10,}")
+        lines.append(f"  Estimated cost:  ${self.total_cost:.4f}")
+        return "\n".join(lines)
 
 
 # =============================================================================
@@ -354,7 +437,7 @@ Additional text content from the page (for reference):
 
 
 async def extract_with_vision(
-    url, content, current_date_string, name, notes, base_url=None
+    url, content, current_date_string, name, notes, base_url=None, tracker=None
 ):
     """
     Extract events using Gemini's vision capabilities.
@@ -389,6 +472,8 @@ async def extract_with_vision(
             ),
             timeout=GEMINI_TIMEOUT * 2,  # Double timeout for vision
         )
+        if tracker:
+            tracker.track(response, label=f"vision:{name}")
         response_text = response.text.strip()
 
         # Validate JSON
@@ -577,7 +662,7 @@ Events to enrich:
 Return a JSON object with "enrichments" key mapping each event name to its enrichment data."""
 
 
-async def enrich_events_batch(event_names, venue_name):
+async def enrich_events_batch(event_names, venue_name, tracker=None):
     """
     Enrich a batch of events with descriptions, hashtags, and emoji.
 
@@ -600,6 +685,8 @@ async def enrich_events_batch(event_names, venue_name):
             ),
             timeout=GEMINI_TIMEOUT,
         )
+        if tracker:
+            tracker.track(response, label=f"enrichment:{venue_name}")
         result = json.loads(response.text.strip())
         return {
             item.get("name", ""): {
@@ -614,7 +701,7 @@ async def enrich_events_batch(event_names, venue_name):
         return {}
 
 
-async def extract_chunk(chunk_content, current_date_string, notes):
+async def extract_chunk(chunk_content, current_date_string, notes, tracker=None):
     """
     Extract events from a single content chunk.
 
@@ -642,6 +729,8 @@ Website content:
             ),
             timeout=CHUNK_TIMEOUT,
         )
+        if tracker:
+            tracker.track(response, label="chunk")
         result = json.loads(response.text.strip())
         return result.get("events", [])
     except TimeoutError:
@@ -653,7 +742,7 @@ Website content:
 
 
 async def extract_large_page(
-    url, content, current_date_string, name, notes, max_batches=None
+    url, content, current_date_string, name, notes, max_batches=None, tracker=None
 ):
     """
     Chunked extraction for large pages.
@@ -688,7 +777,7 @@ async def extract_large_page(
         print(
             f"    - Processing chunk {i + 1}/{len(chunks)} (~{chunk_events} events, {len(chunk)} chars)..."
         )
-        events = await extract_chunk(chunk, current_date_string, notes)
+        events = await extract_chunk(chunk, current_date_string, notes, tracker=tracker)
         if events:
             print(f"      Got {len(events)} events")
             all_simple_events.extend(events)
@@ -726,7 +815,7 @@ async def extract_large_page(
         print(
             f"    - Enriching batch {i // ENRICHMENT_BATCH_SIZE + 1}/{num_batches} ({len(batch)} events)..."
         )
-        enrichments = await enrich_events_batch(batch, name)
+        enrichments = await enrich_events_batch(batch, name, tracker=tracker)
         all_enrichments.update(enrichments)
 
     # Combine simple events with enrichments
@@ -821,17 +910,19 @@ async def extract_events(
         base_url: Base URL for resolving relative image URLs
 
     Returns:
-        True if successful, False otherwise
+        Tuple of (success: bool, tracker: TokenTracker) with token usage data.
     """
+    tracker = TokenTracker()
+
     if not GEMINI_API_KEY or not genai_client:
         print("    - Skipping extraction: Gemini API not configured")
-        return False
+        return False, tracker
 
     # Get crawled content from database
     page_content = db.get_crawled_content(cursor, crawl_result_id)
     if not page_content:
         print("    - No crawled content found")
-        return False
+        return False, tracker
 
     # Check for minimum content size to prevent hallucinations
     # When crawled content is too small (e.g., just a URL), the LLM will
@@ -841,7 +932,7 @@ async def extract_events(
         error_msg = f"Crawled content too small ({content_size} bytes < {MIN_CONTENT_SIZE} minimum) - likely failed crawl, skipping to prevent hallucinations"
         print(f"    - {error_msg}")
         db.update_crawl_result_failed(cursor, connection, crawl_result_id, error_msg)
-        return False
+        return False, tracker
 
     # Get source_id for this crawl result
     cursor.execute(
@@ -904,6 +995,7 @@ async def extract_events(
                 website_name,
                 notes,
                 base_url=base_url or url,
+                tracker=tracker,
             )
         elif use_two_pass:
             response_text = await extract_large_page(
@@ -913,6 +1005,7 @@ async def extract_events(
                 website_name,
                 notes,
                 max_batches=max_batches,
+                tracker=tracker,
             )
         else:
             prompt = get_prompt(
@@ -934,6 +1027,7 @@ async def extract_events(
                 ),
                 timeout=GEMINI_TIMEOUT,
             )
+            tracker.track(response, label=f"extract:{website_name}")
             response_text = response.text.strip()
 
         if not response_text or not response_text.strip():
@@ -957,7 +1051,7 @@ async def extract_events(
         print(
             f"    - Extracted {event_count} events with {occurrence_count} occurrences"
         )
-        return True
+        return True, tracker
 
     except Exception as e:
         error_msg = str(e) or type(e).__name__
@@ -965,7 +1059,7 @@ async def extract_events(
         db.update_crawl_result_failed(
             cursor, connection, crawl_result_id, f"Extraction failed: {error_msg}"
         )
-        return False
+        return False, tracker
 
 
 def is_available():

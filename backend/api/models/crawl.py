@@ -1,10 +1,13 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     TIMESTAMP,
     Enum,
     ForeignKey,
+    Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -32,6 +35,9 @@ class CrawlJob(Base):
 
     # Relationships
     results: Mapped[list["CrawlResult"]] = relationship(back_populates="crawl_job")
+    summary: Mapped["CrawlSummary | None"] = relationship(
+        back_populates="crawl_job", uselist=False
+    )
 
 
 class CrawlResult(Base):
@@ -137,3 +143,23 @@ class ExtractedEventLog(Base):
     # Relationships
     extracted_event: Mapped["ExtractedEvent"] = relationship(back_populates="logs")
     event: Mapped["Event | None"] = relationship()
+
+
+class CrawlSummary(Base):
+    __tablename__ = "crawl_summaries"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    crawl_job_id: Mapped[int] = mapped_column(
+        ForeignKey("crawl_jobs.id", ondelete="CASCADE"), unique=True
+    )
+    api_calls: Mapped[int] = mapped_column(Integer, default=0)
+    input_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    output_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    thinking_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    estimated_cost: Mapped[Decimal] = mapped_column(Numeric(10, 6), default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP, server_default=func.current_timestamp()
+    )
+
+    # Relationships
+    crawl_job: Mapped["CrawlJob"] = relationship(back_populates="summary")

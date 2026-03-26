@@ -13,6 +13,7 @@ from api.models.crawl import (
     CrawlContent,
     CrawlJob,
     CrawlResult,
+    CrawlSummary,
     ExtractedEvent,
     ExtractedEventLog,
 )
@@ -43,6 +44,7 @@ __all__ = [
     "CrawlContent",
     "CrawlJob",
     "CrawlResult",
+    "CrawlSummary",
     "Event",
     "EventOccurrence",
     "EventSource",
