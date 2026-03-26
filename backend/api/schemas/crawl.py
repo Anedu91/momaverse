@@ -7,6 +7,7 @@ from api.models.base import CrawlJobStatus, CrawlResultStatus
 
 __all__ = [
     "CrawlContentResponse",
+    "CrawlSummaryResponse",
     "ExtractedEventResponse",
     "ExtractedEventListItem",
     "CrawlResultResponse",
@@ -20,6 +21,19 @@ __all__ = [
 # ---------------------------------------------------------------------------
 # CrawlContent
 # ---------------------------------------------------------------------------
+
+
+class CrawlSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    crawl_job_id: int
+    api_calls: int
+    input_tokens: int
+    output_tokens: int
+    thinking_tokens: int
+    estimated_cost: float
+    created_at: datetime
 
 
 class CrawlContentResponse(BaseModel):
@@ -102,6 +116,7 @@ class CrawlJobResponse(BaseModel):
 
 class CrawlJobDetailResponse(CrawlJobResponse):
     results: list[CrawlResultResponse] = []
+    summary: CrawlSummaryResponse | None = None
 
 
 class CrawlJobListItem(BaseModel):

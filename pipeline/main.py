@@ -27,6 +27,7 @@ import location_resolver
 import merger
 import processor
 from crawl4ai import AsyncWebCrawler
+from extractor import TokenTracker
 
 
 async def run_pipeline(source_ids=None, limit=None):
@@ -284,6 +285,8 @@ async def run_pipeline(source_ids=None, limit=None):
                 }
             )
 
+        job_tracker = TokenTracker()
+
         if extraction_queue:
             print(
                 f"\n  Extracting events from {len(extraction_queue)} source(s) with {num_workers} workers..."
@@ -297,6 +300,7 @@ async def run_pipeline(source_ids=None, limit=None):
             async def extract_worker():
                 """Worker that continuously pulls from queue until empty."""
                 results = []
+                worker_tracker = TokenTracker()
                 while True:
                     try:
                         item = extract_q.get_nowait()
@@ -310,7 +314,7 @@ async def run_pipeline(source_ids=None, limit=None):
                         continue
                     cur = conn.cursor()
                     try:
-                        success = await extractor.extract_events(
+                        success, tracker = await extractor.extract_events(
                             cur,
                             conn,
                             item["crawl_result_id"],
@@ -320,6 +324,7 @@ async def run_pipeline(source_ids=None, limit=None):
                             base_url=item.get("base_url", ""),
                             max_batches=item.get("max_batches"),
                         )
+                        worker_tracker.merge(tracker)
                         if success:
                             if item["source"] == "incomplete":
                                 results.append(
@@ -342,16 +347,17 @@ async def run_pipeline(source_ids=None, limit=None):
                         cur.close()
                         conn.close()
                         extract_q.task_done()
-                return results
+                return results, worker_tracker
 
             # Start N workers and wait for all to complete
             worker_results = await asyncio.gather(
                 *[extract_worker() for _ in range(num_workers)]
             )
 
-            # Flatten results from all workers
-            for results in worker_results:
+            # Flatten results from all workers and merge trackers
+            for results, worker_tracker in worker_results:
                 extracted_results.extend(results)
+                job_tracker.merge(worker_tracker)
 
         print(f"\nExtracted events from {len(extracted_results)} source(s)\n")
 
@@ -411,7 +417,9 @@ async def run_pipeline(source_ids=None, limit=None):
 
         print(f"\nProcessed {total_events} total events\n")
 
-        # Mark crawl job as completed
+        # Save token usage summary and mark crawl job as completed
+        if job_tracker.api_calls > 0:
+            db.save_crawl_summary(cursor, connection, crawl_job_id, job_tracker)
         db.complete_crawl_job(cursor, connection, crawl_job_id)
 
         # STEP 5: Merge extracted_events into final events table and archive outdated events
@@ -435,6 +443,12 @@ async def run_pipeline(source_ids=None, limit=None):
             print(f"  - Resumed processing: {len(incomplete_extracted)}")
         print(f"  - Events extracted: {len(extracted_results)}")
         print(f"  - Total events processed: {total_events}")
+
+        if job_tracker.api_calls > 0:
+            print(f"\n{'=' * 60}")
+            print("GEMINI API USAGE SUMMARY")
+            print(f"{'=' * 60}")
+            print(job_tracker.summary())
 
         return True
 

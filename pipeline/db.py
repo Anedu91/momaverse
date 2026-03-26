@@ -298,6 +298,24 @@ def complete_crawl_job(cursor, connection, crawl_job_id):
     connection.commit()
 
 
+def save_crawl_summary(cursor, connection, crawl_job_id, tracker):
+    """Save token usage summary for a crawl job."""
+    cursor.execute(
+        """INSERT INTO crawl_summaries
+            (crawl_job_id, api_calls, input_tokens, output_tokens, thinking_tokens, estimated_cost)
+        VALUES (%s, %s, %s, %s, %s, %s)""",
+        (
+            crawl_job_id,
+            tracker.api_calls,
+            tracker.input_tokens,
+            tracker.output_tokens,
+            tracker.thinking_tokens,
+            round(tracker.total_cost, 6),
+        ),
+    )
+    connection.commit()
+
+
 def get_incomplete_crawl_results(cursor):
     """
     Get crawl results that need reprocessing.

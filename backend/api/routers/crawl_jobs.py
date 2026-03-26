@@ -51,7 +51,7 @@ async def get_crawl_job(
     stmt = (
         select(CrawlJob)
         .where(CrawlJob.id == job_id)
-        .options(selectinload(CrawlJob.results))
+        .options(selectinload(CrawlJob.results), selectinload(CrawlJob.summary))
     )
     job = await db.scalar(stmt)
     if job is None:
