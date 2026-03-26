@@ -119,41 +119,64 @@ pipeline/
 
 ---
 
-## Creating Sources
+## Sources API
 
-A source needs three things: a record in `sources`, a `crawl_configs` entry, and one or more `source_urls`.
+Sources are managed through the REST API at `/api/v1/sources`.
 
-### 1. Browser Mode (default)
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/v1/sources/` | List all sources (paginated) |
+| `GET` | `/api/v1/sources/{id}` | Get source with URLs and crawl config |
+| `POST` | `/api/v1/sources/` | Create source (with URLs and config in one request) |
+| `PUT` | `/api/v1/sources/{id}` | Update source name/type/disabled |
+| `DELETE` | `/api/v1/sources/{id}` | Soft delete source |
+| `PUT` | `/api/v1/sources/{id}/config` | Create or update crawl config |
+| `POST` | `/api/v1/sources/{id}/urls` | Add a URL |
+| `DELETE` | `/api/v1/sources/{id}/urls/{url_id}` | Remove a URL |
+
+### Creating a Browser Mode Source
 
 For HTML/JavaScript websites. Uses [Crawl4AI](https://github.com/unclecode/crawl4ai) to render pages in a browser.
 
-```sql
--- Create the source
-INSERT INTO sources (name, source_type)
-VALUES ('My Event Site', 'primary');
-
--- Add crawl config (source_id = the ID from above)
-INSERT INTO crawl_configs (source_id, crawl_mode, crawl_frequency)
-VALUES (1, 'browser', 7);
-
--- Add URL(s) to crawl
-INSERT INTO source_urls (source_id, url, sort_order)
-VALUES (1, 'https://example.com/events', 1);
+```json
+POST /api/v1/sources/
+{
+  "name": "My Event Site",
+  "type": "primary",
+  "urls": [
+    {"url": "https://example.com/events", "sort_order": 1}
+  ],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7
+  }
+}
 ```
 
-### 2. JSON API Mode
+### Creating a JSON API Source
 
 For structured API endpoints that return JSON directly. Skips browser rendering and Gemini extraction — maps fields directly to events.
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, crawl_frequency, json_api_config)
-VALUES (1, 'json_api', 3, '{
-  "base_url": "https://api.example.com/events",
-  "data_path": "results.events",
-  "date_window_days": 30,
-  "jsonp_callback": null,
-  "fields_include": null
-}');
+```json
+POST /api/v1/sources/
+{
+  "name": "My API Source",
+  "type": "primary",
+  "urls": [],
+  "crawl_config": {
+    "crawl_mode": "json_api",
+    "crawl_frequency": 3,
+    "json_api_config": {
+      "base_url": "https://api.example.com/events",
+      "data_path": "results.events",
+      "date_window_days": 30,
+      "jsonp_callback": null,
+      "fields_include": null
+    }
+  }
+}
 ```
 
 **json_api_config fields:**
@@ -165,6 +188,39 @@ VALUES (1, 'json_api', 3, '{
 | `date_window_days` | Only include events within N days from today (default: 30) |
 | `jsonp_callback` | JSONP wrapper function name to strip (optional) |
 | `fields_include` | Array of field names to keep (optional, keeps all if null) |
+
+### Updating Crawl Config
+
+Use `PUT /api/v1/sources/{id}/config` to update any config field. Only send the fields you want to change:
+
+```json
+PUT /api/v1/sources/1/config
+{
+  "scan_full_page": true,
+  "delay_before_return_html": 8
+}
+```
+
+### Adding URLs
+
+```json
+POST /api/v1/sources/1/urls
+{
+  "url": "https://example.com/events/page/2",
+  "sort_order": 2
+}
+```
+
+URLs with per-URL JavaScript:
+
+```json
+POST /api/v1/sources/1/urls
+{
+  "url": "https://example.com/calendar",
+  "js_code": "document.querySelector('.next-month').click();",
+  "sort_order": 1
+}
+```
 
 ---
 
@@ -212,11 +268,12 @@ For sites with "Load More" buttons:
 
 Example: A site with a "Show More Events" button:
 
-```sql
-UPDATE crawl_configs SET
-  selector = '.load-more-btn',
-  num_clicks = 5
-WHERE source_id = 1;
+```json
+PUT /api/v1/sources/1/config
+{
+  "selector": ".load-more-btn",
+  "num_clicks": 5
+}
 ```
 
 The crawler generates JavaScript that clicks the button N times with 1-second delays between clicks.
@@ -229,18 +286,26 @@ For complex page interactions beyond simple button clicks:
 |-------|---------|-------------|
 | `js_code` | null | Custom JavaScript to execute before content capture |
 
-This overrides `selector`/`num_clicks` if set. Can also be set per-URL in `source_urls.js_code`.
+This overrides `selector`/`num_clicks` if set. Can also be set per-URL via `js_code` in the URL payload.
 
-```sql
--- Source-level JS (applies to all URLs)
-UPDATE crawl_configs SET
-  js_code = 'document.querySelector(".tab-future").click(); await new Promise(r => setTimeout(r, 2000));'
-WHERE source_id = 1;
+Source-level JS (applies to all URLs):
 
--- Per-URL JS (overrides source-level for this URL only)
-UPDATE source_urls SET
-  js_code = 'document.querySelector(".month-next").click();'
-WHERE source_id = 1 AND url = 'https://example.com/calendar';
+```json
+PUT /api/v1/sources/1/config
+{
+  "js_code": "document.querySelector('.tab-future').click(); await new Promise(r => setTimeout(r, 2000));"
+}
+```
+
+Per-URL JS (overrides source-level for this URL only):
+
+```json
+POST /api/v1/sources/1/urls
+{
+  "url": "https://example.com/calendar",
+  "js_code": "document.querySelector('.month-next').click();",
+  "sort_order": 1
+}
 ```
 
 ### Deep Crawling with Keywords
@@ -265,11 +330,12 @@ For sites where events are spread across multiple pages linked from a listing:
 
 Example:
 
-```sql
-UPDATE crawl_configs SET
-  keywords = 'event, show, concert',
-  max_pages = 20
-WHERE source_id = 1;
+```json
+PUT /api/v1/sources/1/config
+{
+  "keywords": "event, show, concert",
+  "max_pages": 20
+}
 ```
 
 ### Content Filtering
@@ -300,12 +366,17 @@ When set, applies a `PruningContentFilter` that removes boilerplate content (nav
 
 Each source can have multiple URLs. They're crawled sequentially and their content is combined.
 
-```sql
-INSERT INTO source_urls (source_id, url, sort_order)
-VALUES
-  (1, 'https://example.com/events', 1),
-  (1, 'https://example.com/events/page/2', 2);
+Add URLs individually after creating the source:
+
+```json
+POST /api/v1/sources/1/urls
+{"url": "https://example.com/events", "sort_order": 1}
+
+POST /api/v1/sources/1/urls
+{"url": "https://example.com/events/page/2", "sort_order": 2}
 ```
+
+Or include them in the initial `POST /api/v1/sources/` request (see Creating a Browser Mode Source above).
 
 ### URL Templates
 
@@ -318,101 +389,155 @@ URLs support date placeholders resolved at crawl time:
 | `{{next_month}}` | Next month name | `april` |
 | `{{next_month_year}}` | Year of next month | `2026` |
 
-```sql
-INSERT INTO source_urls (source_id, url, sort_order)
-VALUES (1, 'https://example.com/events/{{month}}-{{year}}', 1);
--- Resolves to: https://example.com/events/march-2026
-```
-
-### Per-URL JavaScript
-
-Each URL can have its own JavaScript that overrides the source-level `js_code`:
-
-```sql
-INSERT INTO source_urls (source_id, url, js_code, sort_order)
-VALUES (1, 'https://example.com/calendar', 'document.querySelector(".next-month").click();', 1);
+```json
+POST /api/v1/sources/1/urls
+{"url": "https://example.com/events/{{month}}-{{year}}", "sort_order": 1}
+// Resolves to: https://example.com/events/march-2026
 ```
 
 ---
 
 ## Common Source Configurations
 
+Each example shows a full `POST /api/v1/sources/` request body.
+
 ### Simple static page
 
 All events are listed on one page, no JavaScript needed:
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, crawl_frequency)
-VALUES (1, 'browser', 7);
+```json
+{
+  "name": "Simple Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7
+  }
+}
 ```
 
 ### JavaScript-heavy site with lazy loading
 
 Events load as you scroll:
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, scan_full_page, delay_before_return_html)
-VALUES (1, 'browser', true, 8);
+```json
+{
+  "name": "Lazy Load Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7,
+    "scan_full_page": true,
+    "delay_before_return_html": 8
+  }
+}
 ```
 
 ### Site with "Load More" button
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, selector, num_clicks)
-VALUES (1, 'browser', 'button.load-more', 5);
+```json
+{
+  "name": "Paginated Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7,
+    "selector": "button.load-more",
+    "num_clicks": 5
+  }
+}
 ```
 
 ### Site with bot detection
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, use_stealth, text_mode, light_mode)
-VALUES (1, 'browser', true, false, false);
+```json
+{
+  "name": "Protected Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7,
+    "use_stealth": true,
+    "text_mode": false,
+    "light_mode": false
+  }
+}
 ```
 
 ### Event listing with detail pages
 
 Listing page links to individual event pages:
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, keywords, max_pages)
-VALUES (1, 'browser', 'evento, show, agenda', 20);
+```json
+{
+  "name": "Blog-Style Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7,
+    "keywords": "evento, show, agenda",
+    "max_pages": 20
+  }
+}
 ```
 
 ### Image flyers (no text content)
 
 Events are posted as flyer images:
 
-```sql
-INSERT INTO crawl_configs (source_id, crawl_mode, process_images)
-VALUES (1, 'browser', true);
+```json
+{
+  "name": "Flyer Venue",
+  "type": "primary",
+  "urls": [{"url": "https://example.com/events", "sort_order": 1}],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7,
+    "process_images": true
+  }
+}
 ```
 
 ### Monthly calendar with URL templates
 
-```sql
-INSERT INTO source_urls (source_id, url, sort_order) VALUES
-  (1, 'https://example.com/calendar/{{month}}-{{year}}', 1),
-  (1, 'https://example.com/calendar/{{next_month}}-{{next_month_year}}', 2);
+```json
+{
+  "name": "Calendar Venue",
+  "type": "primary",
+  "urls": [
+    {"url": "https://example.com/calendar/{{month}}-{{year}}", "sort_order": 1},
+    {"url": "https://example.com/calendar/{{next_month}}-{{next_month_year}}", "sort_order": 2}
+  ],
+  "crawl_config": {
+    "crawl_mode": "browser",
+    "crawl_frequency": 7
+  }
+}
 ```
 
 ---
 
 ## Tag Rules
 
-Control how tags are processed across all sources:
+Control how tags are processed across all sources. Managed via `/api/v1/tag-rules`.
 
-```sql
--- Rewrite: normalize tag names
-INSERT INTO tag_rules (rule_type, pattern, replacement)
-VALUES ('rewrite', 'standup', 'Comedy');
+```json
+// Rewrite: normalize tag names
+POST /api/v1/tag-rules/
+{"rule_type": "rewrite", "pattern": "standup", "replacement": "Comedy"}
 
--- Exclude: silently remove a tag
-INSERT INTO tag_rules (rule_type, pattern)
-VALUES ('exclude', 'Lorem');
+// Exclude: silently remove a tag
+POST /api/v1/tag-rules/
+{"rule_type": "exclude", "pattern": "Lorem"}
 
--- Remove: skip the entire event if it has this tag
-INSERT INTO tag_rules (rule_type, pattern)
-VALUES ('remove', 'Cancelled');
+// Remove: skip the entire event if it has this tag
+POST /api/v1/tag-rules/
+{"rule_type": "remove", "pattern": "Cancelled"}
 ```
 
 ## Troubleshooting
@@ -433,11 +558,11 @@ The pipeline skips extraction if crawled content is under 500 bytes (prevents Ge
 
 ### Events not matching existing locations
 
-The processor tries multiple matching strategies (exact name, substring, alternate names, address, short name). If a venue isn't matching:
+The processor tries multiple matching strategies (exact name, substring, alternate names, address, short name). If a venue isn't matching, add alternate names via the locations API:
 
-```sql
-INSERT INTO location_alternate_names (location_id, alternate_name)
-VALUES (42, 'The Venue Formerly Known As...');
+```json
+PUT /api/v1/locations/42
+{"alternate_names": ["The Venue Formerly Known As..."]}
 ```
 
 ### Duplicate events being created
