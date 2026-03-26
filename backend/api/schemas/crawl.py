@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict
@@ -32,7 +33,7 @@ class CrawlSummaryResponse(BaseModel):
     input_tokens: int
     output_tokens: int
     thinking_tokens: int
-    estimated_cost: float
+    estimated_cost: Decimal
     created_at: datetime
 
 

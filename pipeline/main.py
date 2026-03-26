@@ -417,9 +417,9 @@ async def run_pipeline(source_ids=None, limit=None):
 
         print(f"\nProcessed {total_events} total events\n")
 
-        # Save token usage summary and mark crawl job as completed
+        # Save token usage summary and mark crawl job as completed (single commit)
         if job_tracker.api_calls > 0:
-            db.save_crawl_summary(cursor, connection, crawl_job_id, job_tracker)
+            db.save_crawl_summary(cursor, crawl_job_id, job_tracker)
         db.complete_crawl_job(cursor, connection, crawl_job_id)
 
         # STEP 5: Merge extracted_events into final events table and archive outdated events

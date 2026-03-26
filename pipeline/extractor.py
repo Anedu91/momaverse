@@ -15,6 +15,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from io import BytesIO
+from typing import Any
 from urllib.parse import urljoin
 
 import db
@@ -62,10 +63,11 @@ class TokenTracker:
     output_tokens: int = 0
     thinking_tokens: int = 0
     api_calls: int = 0
-    call_details: list = field(default_factory=list)
+    call_details: list[dict[str, Any]] = field(default_factory=list)
 
     def track(self, response, label: str = ""):
         """Extract and accumulate token usage from a Gemini response."""
+        self.api_calls += 1
         usage = getattr(response, "usage_metadata", None)
         if not usage:
             return
@@ -75,7 +77,6 @@ class TokenTracker:
         self.input_tokens += input_t
         self.output_tokens += output_t
         self.thinking_tokens += thinking_t
-        self.api_calls += 1
         if label:
             self.call_details.append(
                 {

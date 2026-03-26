@@ -298,8 +298,11 @@ def complete_crawl_job(cursor, connection, crawl_job_id):
     connection.commit()
 
 
-def save_crawl_summary(cursor, connection, crawl_job_id, tracker):
-    """Save token usage summary for a crawl job."""
+def save_crawl_summary(cursor, crawl_job_id, tracker):
+    """Save token usage summary for a crawl job.
+
+    Does not commit — caller is responsible for committing the transaction.
+    """
     cursor.execute(
         """INSERT INTO crawl_summaries
             (crawl_job_id, api_calls, input_tokens, output_tokens, thinking_tokens, estimated_cost)
@@ -313,7 +316,6 @@ def save_crawl_summary(cursor, connection, crawl_job_id, tracker):
             round(tracker.total_cost, 6),
         ),
     )
-    connection.commit()
 
 
 def get_incomplete_crawl_results(cursor):
