@@ -64,13 +64,17 @@ def _parse_first_result(data: dict[str, object], name: str) -> GeocodingResult |
         return None
 
     rank = hit.get("rank", {})
-    confidence = rank.get("confidence", 0.0) if isinstance(rank, dict) else 0.0
+    confidence_raw = rank.get("confidence", 0.0) if isinstance(rank, dict) else 0.0
+    try:
+        confidence = float(confidence_raw)
+    except (TypeError, ValueError):
+        confidence = 0.0
 
     return GeocodingResult(
         lat=lat_f,
         lng=lon_f,
         formatted_address=str(hit.get("formatted", "")),
-        confidence=float(confidence),
+        confidence=confidence,
     )
 
 
@@ -115,9 +119,16 @@ def geocode_location_name(
             http_client.close()
 
     try:
-        data: dict[str, object] = resp.json()
+        data = resp.json()
     except ValueError:
         logger.warning("Invalid JSON response for %r", name, exc_info=True)
+        return None
+    if not isinstance(data, dict):
+        logger.warning(
+            "Unexpected geocoding payload type for %r: %s",
+            name,
+            type(data).__name__,
+        )
         return None
 
     return _parse_first_result(data, name)
