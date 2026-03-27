@@ -13,12 +13,18 @@ Key features:
 """
 
 import json
+import logging
+import os
 import re
+import time
 from datetime import datetime, timedelta
 
 import db
 import regex
 from crawler import create_safe_filename
+from geocoding import geocode_location_name
+
+logger = logging.getLogger(__name__)
 
 # Blocked emoji characters that render poorly
 BLOCKED_EMOJI = {
@@ -1097,13 +1103,39 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                     (new_location_id, location_name[:255]),
                 )
 
+                # Attempt to geocode the new location
+                geo_result = None
+                geo_api_key = os.environ.get("GEOAPIFY_API_KEY", "")
+                if geo_api_key:
+                    try:
+                        geo_result = geocode_location_name(location_name, geo_api_key)
+                        time.sleep(0.5)  # throttle to stay within Geoapify rate limits
+                    except Exception:
+                        logger.warning(
+                            "Geocoding failed for location %r (id=%s)",
+                            location_name,
+                            new_location_id,
+                            exc_info=True,
+                        )
+
+                if geo_result:
+                    cursor.execute(
+                        "UPDATE locations SET lat = %s, lng = %s, address = %s WHERE id = %s",
+                        (
+                            geo_result.lat,
+                            geo_result.lng,
+                            geo_result.formatted_address,
+                            new_location_id,
+                        ),
+                    )
+
                 # Add to locations_map so subsequent events at same venue match
                 new_info = {
                     "id": new_location_id,
                     "name": location_name,
-                    "address": None,
-                    "lat": None,
-                    "lng": None,
+                    "address": geo_result.formatted_address if geo_result else None,
+                    "lat": geo_result.lat if geo_result else None,
+                    "lng": geo_result.lng if geo_result else None,
                     "emoji": None,
                 }
                 locations_map["names"][location_name.lower()] = new_info
