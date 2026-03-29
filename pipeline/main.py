@@ -138,6 +138,7 @@ async def run_pipeline(source_ids=None, limit=None):
 
         crawl_results = []
         extracted_results = []
+        resolver_locations_created = 0
 
         # Crawl JSON API sources first (fast, no browser needed)
         if json_api_sources:
@@ -157,6 +158,7 @@ async def run_pipeline(source_ids=None, limit=None):
                             created = location_resolver.resolve_locations(
                                 raw_data, source["id"], cur, conn
                             )
+                            resolver_locations_created += created
                             if created > 0:
                                 print(f"    - Auto-created {created} new location(s)")
                         # JSON API sources are directly mapped to extracted;
@@ -376,6 +378,7 @@ async def run_pipeline(source_ids=None, limit=None):
         cursor = connection.cursor()
 
         total_events = 0
+        total_location_stats = processor.LocationStats()
         run_date_str = datetime.now().strftime("%Y%m%d")
 
         # First, process incomplete 'extracted' results from previous runs
@@ -386,7 +389,7 @@ async def run_pipeline(source_ids=None, limit=None):
             for r in incomplete_extracted:
                 print(f"  Processing {r['name']} (from {r['started_at']})...")
                 original_run_date_str = r["started_at"].strftime("%Y%m%d")
-                event_count, _ = processor.process_events(
+                event_count, loc_stats = processor.process_events(
                     cursor,
                     connection,
                     r["crawl_result_id"],
@@ -394,6 +397,7 @@ async def run_pipeline(source_ids=None, limit=None):
                     original_run_date_str,
                 )
                 total_events += event_count
+                total_location_stats.merge(loc_stats)
                 print(f"    - {event_count} events processed")
 
         # Then process newly extracted results
@@ -405,7 +409,7 @@ async def run_pipeline(source_ids=None, limit=None):
                 if source_started_at
                 else run_date_str
             )
-            event_count, _ = processor.process_events(
+            event_count, loc_stats = processor.process_events(
                 cursor,
                 connection,
                 crawl_result_id,
@@ -413,6 +417,7 @@ async def run_pipeline(source_ids=None, limit=None):
                 result_run_date_str,
             )
             total_events += event_count
+            total_location_stats.merge(loc_stats)
             print(f"    - {event_count} events processed")
 
         print(f"\nProcessed {total_events} total events\n")
@@ -443,6 +448,20 @@ async def run_pipeline(source_ids=None, limit=None):
             print(f"  - Resumed processing: {len(incomplete_extracted)}")
         print(f"  - Events extracted: {len(extracted_results)}")
         print(f"  - Total events processed: {total_events}")
+
+        has_location_activity = (
+            resolver_locations_created > 0 or total_location_stats.created > 0
+        )
+        if has_location_activity:
+            print(f"\n{'=' * 60}")
+            print("LOCATION DISCOVERY")
+            print(f"{'=' * 60}")
+            if resolver_locations_created > 0:
+                print(
+                    f"  From JSON API sources: {resolver_locations_created} (with coordinates)"
+                )
+            if total_location_stats.created > 0:
+                print(total_location_stats.summary())
 
         if job_tracker.api_calls > 0:
             print(f"\n{'=' * 60}")

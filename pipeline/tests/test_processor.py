@@ -265,9 +265,11 @@ class TestProcessEvents(unittest.TestCase):
         cursor = MagicMock()
         connection = MagicMock()
 
-        result = process_events(cursor, connection, 100, "Test Source", "2026-03-22")
+        event_count, _ = process_events(
+            cursor, connection, 100, "Test Source", "2026-03-22"
+        )
 
-        self.assertEqual(result, 1)
+        self.assertEqual(event_count, 1)
 
         # Verify the INSERT was into extracted_events with JSONB
         insert_calls = [
@@ -329,9 +331,9 @@ class TestProcessEvents(unittest.TestCase):
         cursor.fetchone.return_value = [99]
         connection = MagicMock()
 
-        result = process_events(cursor, connection, 100, "Test", "2026-03-22")
+        event_count, _ = process_events(cursor, connection, 100, "Test", "2026-03-22")
 
-        self.assertEqual(result, 1)
+        self.assertEqual(event_count, 1)
         insert_calls = [
             c
             for c in cursor.execute.call_args_list
@@ -376,9 +378,9 @@ class TestProcessEvents(unittest.TestCase):
         cursor.fetchone.return_value = [77]  # new location id
         connection = MagicMock()
 
-        result = process_events(cursor, connection, 100, "Test", "2026-03-22")
+        event_count, _ = process_events(cursor, connection, 100, "Test", "2026-03-22")
 
-        self.assertEqual(result, 1)
+        self.assertEqual(event_count, 1)
 
         # Check that INSERT INTO locations was called
         location_inserts = [
