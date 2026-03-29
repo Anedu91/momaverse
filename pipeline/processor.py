@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 import db
 import regex
 from crawler import create_safe_filename
+from geocoding import geocode_location_name
 
 # Blocked emoji characters that render poorly
 BLOCKED_EMOJI = {
@@ -1097,13 +1098,30 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                     (new_location_id, location_name[:255]),
                 )
 
+                # Geocode the new location
+                geo_lat = None
+                geo_lng = None
+                geo_address = None
+                try:
+                    geo_result = geocode_location_name(location_name)
+                    if geo_result is not None:
+                        geo_lat = geo_result.lat
+                        geo_lng = geo_result.lng
+                        geo_address = geo_result.formatted_address
+                        cursor.execute(
+                            "UPDATE locations SET lat = %s, lng = %s, address = %s WHERE id = %s",
+                            (geo_lat, geo_lng, geo_address, new_location_id),
+                        )
+                except Exception:
+                    pass  # Geocoding failure must not block processing
+
                 # Add to locations_map so subsequent events at same venue match
                 new_info = {
                     "id": new_location_id,
                     "name": location_name,
-                    "address": None,
-                    "lat": None,
-                    "lng": None,
+                    "address": geo_address,
+                    "lat": geo_lat,
+                    "lng": geo_lng,
                     "emoji": None,
                 }
                 locations_map["names"][location_name.lower()] = new_info
