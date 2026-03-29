@@ -386,7 +386,7 @@ async def run_pipeline(source_ids=None, limit=None):
             for r in incomplete_extracted:
                 print(f"  Processing {r['name']} (from {r['started_at']})...")
                 original_run_date_str = r["started_at"].strftime("%Y%m%d")
-                event_count = processor.process_events(
+                event_count, _ = processor.process_events(
                     cursor,
                     connection,
                     r["crawl_result_id"],
@@ -405,7 +405,7 @@ async def run_pipeline(source_ids=None, limit=None):
                 if source_started_at
                 else run_date_str
             )
-            event_count = processor.process_events(
+            event_count, _ = processor.process_events(
                 cursor,
                 connection,
                 crawl_result_id,
