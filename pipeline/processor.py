@@ -14,12 +14,44 @@ Key features:
 
 import json
 import re
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
 import db
 import regex
 from crawler import create_safe_filename
 from geocoding import geocode_location_name
+
+
+@dataclass
+class LocationStats:
+    """Tracks new location creation and geocoding outcomes during processing."""
+
+    created: int = 0
+    geocoded: int = 0
+    geocode_failed: list[str] = field(default_factory=list)
+
+    @property
+    def geocode_failed_count(self) -> int:
+        return len(self.geocode_failed)
+
+    def merge(self, other: "LocationStats") -> None:
+        self.created += other.created
+        self.geocoded += other.geocoded
+        self.geocode_failed.extend(other.geocode_failed)
+
+    def summary(self) -> str:
+        lines = [
+            f"  New locations created: {self.created}",
+            f"  Successfully geocoded: {self.geocoded}",
+            f"  Geocoding failed:     {self.geocode_failed_count}",
+        ]
+        if self.geocode_failed:
+            lines.append("  Failed locations:")
+            for name in self.geocode_failed:
+                lines.append(f"    - {name}")
+        return "\n".join(lines)
+
 
 # Blocked emoji characters that render poorly
 BLOCKED_EMOJI = {
@@ -1002,12 +1034,12 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
     Supports both JSON (structured output) and legacy markdown table formats.
 
     Returns:
-        Number of events processed
+        Tuple of (event_count, location_stats)
     """
     extracted_content, source_id = db.get_extracted_content(cursor, crawl_result_id)
     if not extracted_content:
         print("    - No extracted content found")
-        return 0
+        return 0, LocationStats()
 
     crawled_content = db.get_crawled_content(cursor, crawl_result_id)
     source_url, _ = (
@@ -1016,6 +1048,7 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
 
     locations_map = build_locations_map(cursor)
     sources_map = build_sources_map(cursor)
+    location_stats = LocationStats()
 
     safe_filename = create_safe_filename(website_name)
 
@@ -1027,7 +1060,7 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
 
     if not parsed_rows:
         db.update_crawl_result_processed(cursor, connection, crawl_result_id)
-        return 0
+        return 0, LocationStats()
 
     current_date = datetime.now().date()
     future_limit_date = (datetime.now() + timedelta(days=90)).date()
@@ -1039,9 +1072,9 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
 
     for row_dict in parsed_rows:
         # Sanitize fields
-        for field in ["name", "description", "location", "sublocation"]:
-            if field in row_dict:
-                row_dict[field] = sanitize_text(row_dict[field])
+        for field_name in ["name", "description", "location", "sublocation"]:
+            if field_name in row_dict:
+                row_dict[field_name] = sanitize_text(row_dict[field_name])
         if "name" in row_dict:
             row_dict["name"] = (
                 row_dict["name"].replace(" \\ |", ":").replace(" \\|", ":")
@@ -1098,6 +1131,8 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                     (new_location_id, location_name[:255]),
                 )
 
+                location_stats.created += 1
+
                 # Geocode the new location
                 geo_lat = None
                 geo_lng = None
@@ -1112,8 +1147,13 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
                             "UPDATE locations SET lat = %s, lng = %s, address = %s WHERE id = %s",
                             (geo_lat, geo_lng, geo_address, new_location_id),
                         )
-                except Exception:
-                    pass  # Geocoding failure must not block processing
+                        location_stats.geocoded += 1
+                    else:
+                        location_stats.geocode_failed.append(location_name)
+                        print(f"    - Geocoding: no result for '{location_name}'")
+                except Exception as e:
+                    location_stats.geocode_failed.append(location_name)
+                    print(f"    - Geocoding error for '{location_name}': {e}")
 
                 # Add to locations_map so subsequent events at same venue match
                 new_info = {
@@ -1201,4 +1241,4 @@ def process_events(cursor, connection, crawl_result_id, website_name, run_date_s
     connection.commit()
     db.update_crawl_result_processed(cursor, connection, crawl_result_id)
 
-    return event_count
+    return event_count, location_stats
