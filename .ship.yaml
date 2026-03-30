@@ -20,6 +20,15 @@ models:
 
 # Your two agents
 agents:
+  planners:
+    - path: ".claude/agents/backend-engineer.md"
+      match: "Python, FastAPI, SQLAlchemy, Pydantic, APIs, business logic, database models, migrations"
+      model: opus
+
+    - path: ".claude/agents/devops-engineer.md"
+      match: "Terraform, Docker, Kubernetes, CI/CD, GitHub Actions, GCP, infrastructure, deployment, monitoring"
+      model: opus
+
   executors:
     - path: ".claude/agents/backend-engineer.md"
       match: "Python, FastAPI, SQLAlchemy, Pydantic, APIs, business logic, database models, migrations"
