@@ -1,0 +1,39 @@
+# Max lines changed per PR (default: 250)
+maxLinesPerPR: 250
+
+# Branch prefix for ship branches (default: "ship/")
+branchPrefix: "ship/"
+
+# Validation commands (adjust to your stack)
+validate:
+  - "uv run ruff check ."
+  - "uv run ruff format --check ."
+  - "uv run pytest"
+
+# Model per pipeline phase
+models:
+  read: sonnet
+  plan: opus
+  execute: sonnet
+  stack: haiku
+  push: sonnet
+
+# Your two agents
+agents:
+  planners:
+    - path: ".claude/agents/backend-engineer.md"
+      match: "Python, FastAPI, SQLAlchemy, Pydantic, APIs, business logic, database models, migrations"
+      model: opus
+
+    - path: ".claude/agents/devops-engineer.md"
+      match: "Terraform, Docker, Kubernetes, CI/CD, GitHub Actions, GCP, infrastructure, deployment, monitoring"
+      model: opus
+
+  executors:
+    - path: ".claude/agents/backend-engineer.md"
+      match: "Python, FastAPI, SQLAlchemy, Pydantic, APIs, business logic, database models, migrations"
+      model: sonnet
+
+    - path: ".claude/agents/devops-engineer.md"
+      match: "Terraform, Docker, Kubernetes, CI/CD, GitHub Actions, GCP, infrastructure, deployment, monitoring"
+      model: sonnet
