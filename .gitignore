@@ -5,6 +5,7 @@
 
 # Claude Code and IDE
 .claude/
+!.claude/skills/
 .vscode/
 CLAUDE.md
 
