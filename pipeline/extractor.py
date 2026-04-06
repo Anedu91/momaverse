@@ -20,6 +20,7 @@ from urllib.parse import urljoin
 
 import db
 import httpx
+import openai
 from dotenv import load_dotenv
 from PIL import Image
 from processor import extract_url_from_content
@@ -27,30 +28,29 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-try:
-    from google import genai
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash")
+EXTRACTION_TIMEOUT = int(os.environ.get("EXTRACTION_TIMEOUT", "120"))
+openrouter_client = (
+    openai.AsyncOpenAI(
+        api_key=OPENROUTER_API_KEY,
+        base_url="https://openrouter.ai/api/v1",
+    )
+    if OPENROUTER_API_KEY
+    else None
+)
 
-    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
-    GEMINI_TIMEOUT = int(os.environ.get("GEMINI_TIMEOUT", "120"))
-    if GEMINI_API_KEY:
-        genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    else:
-        genai_client = None
-except ImportError:
-    print("Warning: google-genai not installed. Extraction will be skipped.")
-    genai = None
-    genai_client = None
-    GEMINI_API_KEY = None
-    GEMINI_MODEL = None
-    GEMINI_TIMEOUT = 120
+# Aliases used at call sites (to be removed in the next PR when call sites are updated)
+genai_client = openrouter_client
+GEMINI_MODEL = OPENROUTER_MODEL
+GEMINI_TIMEOUT = EXTRACTION_TIMEOUT
 
 
 # =============================================================================
 # Token Usage Tracking
 # =============================================================================
 
-# Gemini 2.5 Flash pricing (per token)
+# OpenRouter google/gemini-2.5-flash pricing (per token)
 PRICE_PER_INPUT_TOKEN = 0.10 / 1_000_000  # $0.10 per 1M tokens
 PRICE_PER_OUTPUT_TOKEN = 0.40 / 1_000_000  # $0.40 per 1M tokens (includes thinking)
 
@@ -66,14 +66,14 @@ class TokenTracker:
     call_details: list[dict[str, Any]] = field(default_factory=list)
 
     def track(self, response, label: str = ""):
-        """Extract and accumulate token usage from a Gemini response."""
+        """Extract and accumulate token usage from an OpenAI-style response."""
         self.api_calls += 1
-        usage = getattr(response, "usage_metadata", None)
+        usage = getattr(response, "usage", None)
         if not usage:
             return
-        input_t = getattr(usage, "prompt_token_count", 0) or 0
-        output_t = getattr(usage, "candidates_token_count", 0) or 0
-        thinking_t = getattr(usage, "thoughts_token_count", 0) or 0
+        input_t = getattr(usage, "prompt_tokens", 0) or 0
+        output_t = getattr(usage, "completion_tokens", 0) or 0
+        thinking_t = 0
         self.input_tokens += input_t
         self.output_tokens += output_t
         self.thinking_tokens += thinking_t
@@ -914,8 +914,8 @@ async def extract_events(
     """
     tracker = TokenTracker()
 
-    if not GEMINI_API_KEY or not genai_client:
-        print("    - Skipping extraction: Gemini API not configured")
+    if not OPENROUTER_API_KEY or not openrouter_client:
+        print("    - Skipping extraction: OpenRouter API not configured")
         return False, tracker
 
     # Get crawled content from database
@@ -983,7 +983,7 @@ async def extract_events(
             )
         else:
             print(
-                f"    - Extracting events using {GEMINI_MODEL} ({len(content_to_process)} chars)..."
+                f"    - Extracting events using {OPENROUTER_MODEL} ({len(content_to_process)} chars)..."
             )
 
     try:
@@ -1063,5 +1063,5 @@ async def extract_events(
 
 
 def is_available():
-    """Check if Gemini API is available."""
-    return GEMINI_API_KEY is not None and genai_client is not None
+    """Check if OpenRouter API is available."""
+    return OPENROUTER_API_KEY is not None and openrouter_client is not None
