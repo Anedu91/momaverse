@@ -424,6 +424,7 @@ resource "google_storage_bucket" "frontend" {
   }
 
   uniform_bucket_level_access = true
+  force_destroy               = true
 }
 
 resource "google_storage_bucket_iam_member" "frontend_public" {
