@@ -465,7 +465,7 @@ async def run_pipeline(source_ids=None, limit=None):
 
         if job_tracker.api_calls > 0:
             print(f"\n{'=' * 60}")
-            print("GEMINI API USAGE SUMMARY")
+            print("AI API USAGE SUMMARY")
             print(f"{'=' * 60}")
             print(job_tracker.summary())
 

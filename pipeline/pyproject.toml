@@ -5,7 +5,7 @@ description = "Momaverse event crawling and processing pipeline"
 requires-python = ">=3.12"
 dependencies = [
     "crawl4ai>=0.8.0",
-    "google-genai>=1.65.0",
+    "openai>=1.0",
     "httpx>=0.28.1",
     "pillow>=12.1.1",
     "psycopg2-binary>=2.9.11",
