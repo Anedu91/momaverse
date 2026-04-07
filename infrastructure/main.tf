@@ -155,8 +155,8 @@ resource "google_secret_manager_secret_version" "secret_key" {
   secret_data = random_password.secret_key.result
 }
 
-resource "google_secret_manager_secret" "gemini_api_key" {
-  secret_id = "${local.name_prefix}-gemini-api-key"
+resource "google_secret_manager_secret" "openrouter_api_key" {
+  secret_id = "${local.name_prefix}-openrouter-api-key"
   labels    = local.labels
 
   replication {
@@ -166,7 +166,7 @@ resource "google_secret_manager_secret" "gemini_api_key" {
   depends_on = [google_project_service.apis]
 }
 
-# Gemini API key value is added manually in GCP Console → Secret Manager
+# OpenRouter API key value is added manually in GCP Console → Secret Manager
 
 # ─── Service Accounts ────────────────────────────────────────────────────────
 
@@ -206,8 +206,8 @@ resource "google_secret_manager_secret_iam_member" "pipeline_db_password" {
   member    = "serviceAccount:${google_service_account.pipeline.email}"
 }
 
-resource "google_secret_manager_secret_iam_member" "pipeline_gemini_key" {
-  secret_id = google_secret_manager_secret.gemini_api_key.id
+resource "google_secret_manager_secret_iam_member" "pipeline_openrouter_key" {
+  secret_id = google_secret_manager_secret.openrouter_api_key.id
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.pipeline.email}"
 }
@@ -371,10 +371,10 @@ resource "google_cloud_run_v2_job" "pipeline" {
           }
         }
         env {
-          name = "GEMINI_API_KEY"
+          name = "OPENROUTER_API_KEY"
           value_source {
             secret_key_ref {
-              secret  = google_secret_manager_secret.gemini_api_key.secret_id
+              secret  = google_secret_manager_secret.openrouter_api_key.secret_id
               version = "latest"
             }
           }
