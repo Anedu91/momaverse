@@ -28,22 +28,30 @@ from pydantic import BaseModel, Field
 
 load_dotenv()
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_CRAWLER_API_KEY", "")
 OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "google/gemini-2.5-flash")
 EXTRACTION_TIMEOUT = int(os.environ.get("EXTRACTION_TIMEOUT", "120"))
-openrouter_client = (
-    openai.AsyncOpenAI(
-        api_key=OPENROUTER_API_KEY,
-        base_url="https://openrouter.ai/api/v1",
-    )
-    if OPENROUTER_API_KEY
-    else None
+if not OPENROUTER_API_KEY:
+    raise RuntimeError("OPENROUTER_CRAWLER_API_KEY env var is required")
+openrouter_client = openai.AsyncOpenAI(
+    api_key=OPENROUTER_API_KEY,
+    base_url="https://openrouter.ai/api/v1",
 )
 
-# Aliases used at call sites (to be removed in the next PR when call sites are updated)
-genai_client = openrouter_client
 GEMINI_MODEL = OPENROUTER_MODEL
 GEMINI_TIMEOUT = EXTRACTION_TIMEOUT
+
+
+def _normalize_events_response(parsed):
+    """Normalize parsed JSON to {"events": [...]} format.
+
+    Handles bare arrays or objects with an "events" key.
+    """
+    if isinstance(parsed, list):
+        return {"events": parsed}
+    if isinstance(parsed, dict):
+        return parsed
+    return {"events": []}
 
 
 # =============================================================================
@@ -457,28 +465,36 @@ async def extract_with_vision(
     # Build prompt
     prompt_text = get_vision_prompt(url, content, current_date_string, name, notes)
 
-    # Build multimodal content: text prompt + images
-    contents = [prompt_text] + image_parts
-
     try:
+        # Build multimodal messages for OpenAI vision API
+        vision_content = [{"type": "text", "text": prompt_text}]
+        for img_part in image_parts:
+            if isinstance(img_part, dict) and "inline_data" in img_part:
+                mime = img_part["inline_data"].get("mime_type", "image/jpeg")
+                b64 = img_part["inline_data"]["data"]
+                vision_content.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}"},
+                    }
+                )
+
         response = await asyncio.wait_for(
-            genai_client.aio.models.generate_content(
+            openrouter_client.chat.completions.create(
                 model=GEMINI_MODEL,
-                contents=contents,
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": EventList,
-                },
+                messages=[{"role": "user", "content": vision_content}],
+                response_format={"type": "json_object"},
             ),
             timeout=GEMINI_TIMEOUT * 2,  # Double timeout for vision
         )
         if tracker:
             tracker.track(response, label=f"vision:{name}")
-        response_text = response.text.strip()
+        response_text = response.choices[0].message.content.strip()
 
         # Validate JSON
         try:
-            parsed = json.loads(response_text)
+            parsed = _normalize_events_response(json.loads(response_text))
+            response_text = json.dumps(parsed)
             event_count = len(parsed.get("events", []))
             print(f"    - Vision extracted {event_count} events from images")
         except json.JSONDecodeError:
@@ -675,19 +691,16 @@ async def enrich_events_batch(event_names, venue_name, tracker=None):
 
     try:
         response = await asyncio.wait_for(
-            genai_client.aio.models.generate_content(
+            openrouter_client.chat.completions.create(
                 model=GEMINI_MODEL,
-                contents=prompt,
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": EnrichmentBatch,
-                },
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
             ),
             timeout=GEMINI_TIMEOUT,
         )
         if tracker:
             tracker.track(response, label=f"enrichment:{venue_name}")
-        result = json.loads(response.text.strip())
+        result = json.loads(response.choices[0].message.content.strip())
         return {
             item.get("name", ""): {
                 "description": item.get("description", ""),
@@ -712,6 +725,8 @@ async def extract_chunk(chunk_content, current_date_string, notes, tracker=None)
     prompt = f"""Today's date is {current_date_string}. Extract ALL events from this Buenos Aires events page content.
 
 For each event provide: name, location (venue name), occurrences (array of start_date in YYYY-MM-DD, start_time, end_time), and url if available.
+
+Return a JSON object with an "events" key containing an array of events: {{"events": [...]}}
 {note_section}
 Website content:
 
@@ -719,19 +734,18 @@ Website content:
 
     try:
         response = await asyncio.wait_for(
-            genai_client.aio.models.generate_content(
+            openrouter_client.chat.completions.create(
                 model=GEMINI_MODEL,
-                contents=prompt,
-                config={
-                    "response_mime_type": "application/json",
-                    "response_schema": SimpleEventList,
-                },
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
             ),
             timeout=CHUNK_TIMEOUT,
         )
         if tracker:
             tracker.track(response, label="chunk")
-        result = json.loads(response.text.strip())
+        result = _normalize_events_response(
+            json.loads(response.choices[0].message.content.strip())
+        )
         return result.get("events", [])
     except TimeoutError:
         print(f"      Chunk timeout after {CHUNK_TIMEOUT}s")
@@ -882,6 +896,8 @@ Rules:
 - For recurring events, expand ALL individual dates into the occurrences array
 - If no events are found, return an empty events list
 
+Return a JSON object with an "events" key: {{"events": [...]}}
+
 Website content:
 
 {page_content}"""
@@ -913,10 +929,6 @@ async def extract_events(
         Tuple of (success: bool, tracker: TokenTracker) with token usage data.
     """
     tracker = TokenTracker()
-
-    if not OPENROUTER_API_KEY or not openrouter_client:
-        print("    - Skipping extraction: OpenRouter API not configured")
-        return False, tracker
 
     # Get crawled content from database
     page_content = db.get_crawled_content(cursor, crawl_result_id)
@@ -1017,25 +1029,23 @@ async def extract_events(
                 existing_events,
             )
             response = await asyncio.wait_for(
-                genai_client.aio.models.generate_content(
+                openrouter_client.chat.completions.create(
                     model=GEMINI_MODEL,
-                    contents=prompt,
-                    config={
-                        "response_mime_type": "application/json",
-                        "response_schema": EventList,
-                    },
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
                 ),
                 timeout=GEMINI_TIMEOUT,
             )
             tracker.track(response, label=f"extract:{website_name}")
-            response_text = response.text.strip()
+            response_text = response.choices[0].message.content.strip()
 
         if not response_text or not response_text.strip():
             response_text = '{"events": []}'
 
         # Validate JSON
         try:
-            parsed = json.loads(response_text)
+            parsed = _normalize_events_response(json.loads(response_text))
+            response_text = json.dumps(parsed)
             event_count = len(parsed.get("events", []))
             occurrence_count = sum(
                 len(e.get("occurrences", [])) for e in parsed.get("events", [])
@@ -1060,8 +1070,3 @@ async def extract_events(
             cursor, connection, crawl_result_id, f"Extraction failed: {error_msg}"
         )
         return False, tracker
-
-
-def is_available():
-    """Check if OpenRouter API is available."""
-    return OPENROUTER_API_KEY is not None and openrouter_client is not None
