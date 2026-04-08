@@ -6,15 +6,22 @@ from typing import Any
 
 import httpx
 from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from api.celery_app import celery
 from api.config import get_settings
-from api.database import AsyncSessionLocal
 from api.models.location import Location
 from api.services.geocoding import geocode_location_name
 from api.task_names import GEOCODE_LOCATION
 
 logger = logging.getLogger(__name__)
+
+
+def _make_session() -> async_sessionmaker[AsyncSession]:
+    """Create a fresh engine + session factory bound to the current event loop."""
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url)
+    return async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
 async def _geocode_location(location_id: int) -> None:
@@ -25,7 +32,8 @@ async def _geocode_location(location_id: int) -> None:
         logger.warning("Geoapify API key not configured, skipping geocoding")
         return
 
-    async with AsyncSessionLocal() as session:
+    session_factory = _make_session()
+    async with session_factory() as session:
         location = await session.scalar(
             select(Location).where(Location.id == location_id)
         )
@@ -59,7 +67,7 @@ async def _geocode_location(location_id: int) -> None:
         )
 
 
-@celery.task(bind=True, name=GEOCODE_LOCATION, queue="geocoding")
+@celery.task(bind=True, name=GEOCODE_LOCATION)
 def geocode_location(self: Any, location_id: int) -> None:
     """Geocode a location by ID. Retries on API errors with exponential backoff."""
     try:

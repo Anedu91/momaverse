@@ -45,8 +45,8 @@ class TestGeocodeLocationTask:
 
         with (
             patch(
-                "api.tasks.geocoding.AsyncSessionLocal",
-                return_value=AsyncSessionStub(db_session),
+                "api.tasks.geocoding._make_session",
+                return_value=SessionFactoryStub(db_session),
             ),
             patch(
                 "api.tasks.geocoding.get_settings",
@@ -78,8 +78,8 @@ class TestGeocodeLocationTask:
 
         with (
             patch(
-                "api.tasks.geocoding.AsyncSessionLocal",
-                return_value=AsyncSessionStub(db_session),
+                "api.tasks.geocoding._make_session",
+                return_value=SessionFactoryStub(db_session),
             ),
             patch(
                 "api.tasks.geocoding.get_settings",
@@ -103,8 +103,8 @@ class TestGeocodeLocationTask:
 
         with (
             patch(
-                "api.tasks.geocoding.AsyncSessionLocal",
-                return_value=AsyncSessionStub(db_session),
+                "api.tasks.geocoding._make_session",
+                return_value=SessionFactoryStub(db_session),
             ),
             patch(
                 "api.tasks.geocoding.get_settings",
@@ -129,8 +129,8 @@ class TestGeocodeLocationTask:
     ) -> None:
         with (
             patch(
-                "api.tasks.geocoding.AsyncSessionLocal",
-                return_value=AsyncSessionStub(db_session),
+                "api.tasks.geocoding._make_session",
+                return_value=SessionFactoryStub(db_session),
             ),
             patch(
                 "api.tasks.geocoding.get_settings",
@@ -198,9 +198,8 @@ class FakeSettings:
         self.geoapify_api_key = geoapify_api_key
 
 
-class AsyncSessionStub:
-    """Wraps a real AsyncSession but makes it usable as an async context manager
-    without actually closing the underlying test session."""
+class _SessionStub:
+    """Wraps a real AsyncSession as an async context manager without closing it."""
 
     def __init__(self, session: AsyncSession):
         self._session = session
@@ -209,4 +208,14 @@ class AsyncSessionStub:
         return self._session
 
     async def __aexit__(self, *args: object) -> None:
-        pass  # don't close — test fixture owns the session
+        pass
+
+
+class SessionFactoryStub:
+    """Mimics async_sessionmaker — calling it returns an _SessionStub."""
+
+    def __init__(self, session: AsyncSession):
+        self._session = session
+
+    def __call__(self) -> _SessionStub:
+        return _SessionStub(self._session)

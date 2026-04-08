@@ -39,6 +39,8 @@ uv run pre-commit run --all-files
 
 ## Run
 
+### API server
+
 ```bash
 # Development (auto-reload on file changes)
 uv run fastapi dev api/main.py
@@ -51,6 +53,20 @@ The API will be available at http://127.0.0.1:8000
 
 - Swagger docs: http://127.0.0.1:8000/docs
 - Health check: http://127.0.0.1:8000/health
+
+### Celery worker
+
+The backend uses Celery for async tasks (geocoding, event processing). It requires a running Redis instance as the message broker.
+
+```bash
+# Start Redis (if not already running)
+docker run -d --name redis -p 6379:6379 redis:7
+
+# Start the Celery worker
+uv run celery -A api.celery_app worker --loglevel=info
+```
+
+By default the worker connects to `redis://localhost:6379/0`. Override this by setting `REDIS_URL` in your `.env` file.
 
 ## Project Structure
 
