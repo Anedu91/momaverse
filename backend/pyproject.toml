@@ -68,6 +68,12 @@ disallow_untyped_defs = false
 disallow_untyped_decorators = false
 
 [[tool.mypy.overrides]]
+module = "api.tasks.*"
+# Celery task decorators are untyped and inject `self` without annotation
+disallow_untyped_decorators = false
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
 module = "api.models.*"
 # SQLAlchemy models use string forward references resolved at runtime
 disable_error_code = ["name-defined"]

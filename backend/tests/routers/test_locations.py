@@ -1,7 +1,7 @@
 """Tests for the locations router."""
 
 from collections.abc import AsyncGenerator
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
@@ -35,6 +35,14 @@ def _make_app(
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_geoapify_key] = _override_geoapify_key
     return app
+
+
+@pytest.fixture(autouse=True)
+def _mock_celery_send_task():
+    """Prevent Celery from trying to connect to Redis during tests."""
+    with patch("api.routers.locations.celery") as mock_celery:
+        mock_celery.send_task = MagicMock()
+        yield mock_celery
 
 
 @pytest_asyncio.fixture
