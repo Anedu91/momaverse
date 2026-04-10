@@ -22,8 +22,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.models.base import EventStatus, ExtractedEventStatus
 from api.models.crawl import ExtractedEventLog
-from api.models.event import Event, EventOccurrence, EventSource
+from api.models.event import Event, EventOccurrence, EventSource, EventTag, EventUrl
 from api.models.location import Location
+from api.models.tag import Tag
 
 STOP_WORDS: frozenset[str] = frozenset(
     {"the", "and", "for", "with", "from", "into", "your"}
@@ -751,3 +752,175 @@ async def log_extracted_event(
             message=message,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# Async writers — ported from ``pipeline/merger.py`` lines 654-802.
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ExtractedEventInput:
+    """Input payload for :func:`merge_into_existing_event` and
+    :func:`create_new_event`.
+
+    Mirrors the per-row state used by ``pipeline/merger.py`` when iterating
+    over ``new_extracted_events``.
+    """
+
+    ee_id: int
+    name: str
+    short_name: str | None
+    description: str | None
+    emoji: str | None
+    sublocation: str | None
+    location_id: int | None
+    url: str | None
+    source_id: int
+    lat: float | None
+    lng: float | None
+    occurrences: list[ParsedOccurrence]
+    tags: list[str]
+
+
+async def merge_into_existing_event(
+    db: AsyncSession,
+    *,
+    event_id: int,
+    extracted: ExtractedEventInput,
+) -> None:
+    """Merge an extracted event into an existing event.
+
+    Ported from ``pipeline/merger.py`` lines 654-702. Mutations performed:
+
+    - Un-archive the event if currently archived.
+    - Append the extracted ``url`` (truncated to 2000 chars) to ``event_urls``
+      if not already present for this event.
+    - Set ``events.location_id`` when the target event has none and the
+      extracted payload provides one.
+    - Insert a non-primary :class:`EventSource` linking the extracted event
+      to the target event.
+
+    Caller owns the transaction; this function does not commit.
+    """
+    event = (
+        await db.execute(select(Event).where(Event.id == event_id))
+    ).scalar_one_or_none()
+    if event is None:
+        return
+
+    if event.status == EventStatus.archived and event.deleted_at is None:
+        event.status = EventStatus.active
+
+    if extracted.url:
+        truncated_url = extracted.url[:2000]
+        existing_url_id = (
+            await db.execute(
+                select(EventUrl.id).where(
+                    EventUrl.event_id == event_id,
+                    EventUrl.url == truncated_url,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_url_id is None:
+            db.add(EventUrl(event_id=event_id, url=truncated_url))
+
+    if event.location_id is None and extracted.location_id is not None:
+        event.location_id = extracted.location_id
+
+    db.add(
+        EventSource(
+            event_id=event_id,
+            extracted_event_id=extracted.ee_id,
+            source_id=extracted.source_id,
+            is_primary=False,
+        )
+    )
+
+
+async def create_new_event(
+    db: AsyncSession,
+    *,
+    extracted: ExtractedEventInput,
+) -> int:
+    """Create a new :class:`Event` and all related rows.
+
+    Ported from ``pipeline/merger.py`` lines 704-782. Inserts, in order:
+
+    - The :class:`Event` itself (field lengths truncated to match the PHP
+      migration).
+    - One :class:`EventOccurrence` per entry in ``extracted.occurrences``.
+    - An :class:`EventUrl` row when ``extracted.url`` is set.
+    - One :class:`Tag` per tag name (created on demand) and a matching
+      :class:`EventTag` link row.
+    - A primary :class:`EventSource` linking the extracted event to the
+      new event.
+
+    Returns the new event id. Caller owns the transaction; this function
+    does not commit.
+    """
+    if extracted.location_id is None:
+        raise ValueError("create_new_event requires extracted.location_id")
+
+    event = Event(
+        name=extracted.name[:500],
+        short_name=extracted.short_name[:255] if extracted.short_name else None,
+        description=extracted.description,
+        emoji=extracted.emoji[:10] if extracted.emoji else None,
+        location_id=extracted.location_id,
+        sublocation=extracted.sublocation[:255] if extracted.sublocation else None,
+    )
+    db.add(event)
+    await db.flush()
+    new_event_id = event.id
+
+    for occ in extracted.occurrences:
+        db.add(
+            EventOccurrence(
+                event_id=new_event_id,
+                start_date=occ.start_date,
+                start_time=occ.start_time,
+                end_date=occ.end_date,
+                end_time=occ.end_time,
+            )
+        )
+
+    if extracted.url:
+        db.add(EventUrl(event_id=new_event_id, url=extracted.url[:2000]))
+
+    for tag_name in extracted.tags:
+        if not tag_name:
+            continue
+        truncated = tag_name[:100]
+        tag_id = (
+            await db.execute(select(Tag.id).where(Tag.name == truncated))
+        ).scalar_one_or_none()
+        if tag_id is None:
+            tag = Tag(name=truncated)
+            db.add(tag)
+            await db.flush()
+            tag_id = tag.id
+
+        existing_link = (
+            await db.execute(
+                select(EventTag.event_id).where(
+                    EventTag.event_id == new_event_id,
+                    EventTag.tag_id == tag_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if existing_link is None:
+            db.add(EventTag(event_id=new_event_id, tag_id=tag_id))
+            await db.flush()
+
+    db.add(
+        EventSource(
+            event_id=new_event_id,
+            extracted_event_id=extracted.ee_id,
+            source_id=extracted.source_id,
+            is_primary=True,
+        )
+    )
+    await db.flush()
+
+    return new_event_id
