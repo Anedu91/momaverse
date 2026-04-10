@@ -48,6 +48,7 @@ class ExtractedEventStatus(enum.StrEnum):
     skipped_no_location = "skipped_no_location"
     skipped_no_occurrences = "skipped_no_occurrences"
     skipped_duplicate = "skipped_duplicate"
+    skipped_tag_removed = "skipped_tag_removed"
 
 
 class EventStatus(enum.StrEnum):
