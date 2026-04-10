@@ -1,9 +1,23 @@
-"""Tests for pure event-processing helpers."""
+"""Tests for event-processing helpers (pure + async DB services)."""
 
+from unittest.mock import MagicMock, patch
+
+import pytest
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.models.base import TagRuleType
+from api.models.location import Location, LocationAlternateName
+from api.models.tag import TagRule
 from api.services.event_processing import (
     BLOCKED_EMOJI,
+    TagRules,
     extract_emoji,
     generate_short_name,
+    load_tag_rules,
+    process_tags,
+    resolve_location,
+    should_skip_for_tags,
 )
 
 
@@ -41,3 +55,175 @@ def test_extract_emoji_skips_blocked_emoji_and_finds_next() -> None:
     emoji, stripped = extract_emoji(text)
     assert emoji == "\U0001f3a8"
     assert stripped == "Art Show"
+
+
+@pytest.mark.asyncio
+class TestResolveLocation:
+    async def test_exact_name_match(self, db_session: AsyncSession) -> None:
+        existing = Location(name="Museum of Modern Art", emoji="\U0001f3a8")
+        db_session.add(existing)
+        await db_session.flush()
+
+        with patch("api.services.event_processing.geocode_location") as mock_task:
+            result = await resolve_location(
+                db_session,
+                location_name="Museum of Modern Art",
+                sublocation=None,
+                source_site_name="site",
+                event_name="Some Event",
+            )
+
+        assert result is not None
+        assert result.id == existing.id
+        mock_task.delay.assert_not_called()
+
+    async def test_alternate_name_match(self, db_session: AsyncSession) -> None:
+        loc = Location(name="Museum of Modern Art", emoji="\U0001f3a8")
+        loc.alternate_names = [LocationAlternateName(alternate_name="MoMA")]
+        db_session.add(loc)
+        await db_session.flush()
+
+        with patch("api.services.event_processing.geocode_location") as mock_task:
+            result = await resolve_location(
+                db_session,
+                location_name="MoMA",
+                sublocation=None,
+                source_site_name="site",
+                event_name="Show",
+            )
+
+        assert result is not None
+        assert result.id == loc.id
+        mock_task.delay.assert_not_called()
+
+    async def test_fuzzy_match_above_threshold(self, db_session: AsyncSession) -> None:
+        loc = Location(name="Museum of Modern Art", emoji="\U0001f3a8")
+        db_session.add(loc)
+        await db_session.flush()
+
+        with patch("api.services.event_processing.geocode_location") as mock_task:
+            result = await resolve_location(
+                db_session,
+                location_name="Museum of Moderne Art",
+                sublocation=None,
+                source_site_name="site",
+                event_name="Show",
+            )
+
+        assert result is not None
+        assert result.id == loc.id
+        mock_task.delay.assert_not_called()
+
+    async def test_unknown_creates_and_enqueues_geocode(
+        self, db_session: AsyncSession
+    ) -> None:
+        with patch(
+            "api.services.event_processing.geocode_location", new=MagicMock()
+        ) as mock_task:
+            result = await resolve_location(
+                db_session,
+                location_name="Totally Unique Venue 42",
+                sublocation=None,
+                source_site_name="some-source",
+                event_name="Mystery Event",
+            )
+
+        assert result is not None
+        assert result.id is not None
+        assert result.name == "Totally Unique Venue 42"
+        assert result.emoji == "\U0001f3ad"
+        mock_task.delay.assert_called_once_with(result.id)
+
+        fetched = await db_session.get(Location, result.id)
+        assert fetched is not None
+        assert fetched.name == "Totally Unique Venue 42"
+
+    async def test_none_location_name_returns_none(
+        self, db_session: AsyncSession
+    ) -> None:
+        with patch("api.services.event_processing.geocode_location") as mock_task:
+            result = await resolve_location(
+                db_session,
+                location_name=None,
+                sublocation=None,
+                source_site_name="site",
+                event_name="Show",
+            )
+
+        assert result is None
+        mock_task.delay.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestProcessTags:
+    async def _cleanup_rules(self, db_session: AsyncSession) -> None:
+        """Remove any pre-existing TagRule rows so each test is isolated."""
+        rows = (await db_session.execute(select(TagRule))).scalars().all()
+        for row in rows:
+            await db_session.delete(row)
+        await db_session.flush()
+
+    async def test_rewrite_transforms(self, db_session: AsyncSession) -> None:
+        await self._cleanup_rules(db_session)
+        db_session.add(
+            TagRule(
+                rule_type=TagRuleType.rewrite,
+                pattern="livemusic",
+                replacement="Live Music",
+            )
+        )
+        await db_session.flush()
+
+        rules = await load_tag_rules(db_session)
+        result = await process_tags(["LiveMusic"], rules)
+
+        assert result == ["Live Music"]
+
+    async def test_exclude_drops(self, db_session: AsyncSession) -> None:
+        await self._cleanup_rules(db_session)
+        db_session.add(
+            TagRule(
+                rule_type=TagRuleType.exclude,
+                pattern="spam",
+                replacement=None,
+            )
+        )
+        await db_session.flush()
+
+        rules = await load_tag_rules(db_session)
+        result = await process_tags(["Spam", "Art"], rules)
+
+        assert result == ["Art"]
+
+    async def test_extra_tags_appended_and_deduped(
+        self, db_session: AsyncSession
+    ) -> None:
+        await self._cleanup_rules(db_session)
+        rules = await load_tag_rules(db_session)
+
+        result = await process_tags(["Art"], rules, extra_tags=["art"])
+
+        assert len(result) == 1
+        assert result[0].lower() == "art"
+
+    async def test_should_skip_for_tags_removal(self, db_session: AsyncSession) -> None:
+        await self._cleanup_rules(db_session)
+        db_session.add(
+            TagRule(
+                rule_type=TagRuleType.remove,
+                pattern="nsfw",
+                replacement=None,
+            )
+        )
+        await db_session.flush()
+
+        rules = await load_tag_rules(db_session)
+        assert should_skip_for_tags(["NSFW", "Art"], rules) is True
+
+    async def test_should_skip_for_tags_false(self, db_session: AsyncSession) -> None:
+        await self._cleanup_rules(db_session)
+        rules = await load_tag_rules(db_session)
+
+        assert should_skip_for_tags(["Art", "Music"], rules) is False
+        empty_rules = TagRules(rewrites={}, excludes=frozenset(), removals=frozenset())
+        assert should_skip_for_tags(["nsfw"], empty_rules) is False

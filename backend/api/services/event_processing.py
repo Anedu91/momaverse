@@ -1,14 +1,25 @@
-"""Pure, sync event-processing helpers ported from ``pipeline/processor.py``.
+"""Event-processing helpers ported from ``pipeline/processor.py``.
 
-This module contains only the synchronous helpers needed for the backend
-event-processing consumer: short-name generation and emoji extraction,
-plus the ``BLOCKED_EMOJI`` constant. Async DB-touching services
-(``resolve_location``, tag processing) are added in a follow-up PR.
+This module contains the synchronous pure helpers (short-name generation,
+emoji extraction) as well as the async DB-touching services
+(``resolve_location``, ``load_tag_rules``, ``process_tags``,
+``should_skip_for_tags``) used by the backend event-processing consumer.
 """
 
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from difflib import SequenceMatcher
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from api.models.base import TagRuleType
+from api.models.location import Location
+from api.models.tag import TagRule
+from api.tasks.geocoding import geocode_location
 
 # ---------------------------------------------------------------------------
 # Blocked emoji — ported verbatim from pipeline/processor.py lines 57-77.
@@ -133,3 +144,261 @@ def generate_short_name(name: str, location_name: str | None = None) -> str:
             short = short[: -len(suffix)]
 
     return short.strip()
+
+
+# ---------------------------------------------------------------------------
+# Tag processing — ported from ``pipeline/processor.py`` (lines 262, 336).
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TagRules:
+    """Bucketed tag rules keyed by normalized pattern.
+
+    - ``rewrites``: normalized pattern -> replacement string.
+    - ``excludes``: normalized patterns whose tags are dropped.
+    - ``removals``: normalized patterns whose presence means "skip event".
+    """
+
+    rewrites: dict[str, str]
+    excludes: frozenset[str]
+    removals: frozenset[str]
+
+
+def _normalize_tag_key(tag: str) -> str:
+    """Normalize a tag for rewrite/exclude/remove lookups."""
+    return tag.lower().replace(" ", "")
+
+
+def _normalize_location_name(name: str | None) -> str:
+    """Normalize a location name for matching.
+
+    Ported from ``pipeline/processor.py:586``. Lowercases, strips
+    punctuation, drops leading ``"the "`` on longer names, and treats
+    ``virtual``/``online``/``livestream`` as non-matches.
+    """
+    if not name:
+        return ""
+
+    original_lower = name.lower()
+    normalized = re.sub(r"[^\w\s]", "", original_lower)
+
+    if normalized in {"virtual", "online", "livestream"}:
+        return ""
+    if len(normalized) > 15 and normalized.startswith("the "):
+        normalized = normalized[4:]
+
+    return " ".join(normalized.split())
+
+
+def _normalize_street_address(addr: str | None) -> str | None:
+    """Normalize a street address for matching.
+
+    Ported from ``pipeline/processor.py:639``. Returns ``None`` if the
+    input is ``None``/empty or shorter than 5 characters after
+    normalization.
+    """
+    if not addr:
+        return None
+
+    normalized = addr.lower().strip()
+    replacements = [
+        ("avenue", "ave"),
+        ("street", "st"),
+        ("boulevard", "blvd"),
+        ("drive", "dr"),
+        ("road", "rd"),
+        ("place", "pl"),
+        ("court", "ct"),
+        ("lane", "ln"),
+        ("parkway", "pkwy"),
+        ("highway", "hwy"),
+        ("east", "e"),
+        ("west", "w"),
+        ("north", "n"),
+        ("south", "s"),
+    ]
+    for long_form, short_form in replacements:
+        normalized = re.sub(r"\b" + long_form + r"\b", short_form, normalized)
+
+    return normalized if len(normalized) >= 5 else None
+
+
+async def load_tag_rules(db: AsyncSession) -> TagRules:
+    """Load active tag rules from the DB, bucketed by ``TagRuleType``."""
+    stmt = select(TagRule).where(TagRule.deleted_at.is_(None))
+    result = await db.execute(stmt)
+    rules = result.scalars().all()
+
+    rewrites: dict[str, str] = {}
+    excludes: set[str] = set()
+    removals: set[str] = set()
+
+    for rule in rules:
+        key = _normalize_tag_key(rule.pattern)
+        if rule.rule_type == TagRuleType.rewrite:
+            if rule.replacement is not None:
+                rewrites[key] = rule.replacement
+        elif rule.rule_type == TagRuleType.exclude:
+            excludes.add(key)
+        elif rule.rule_type == TagRuleType.remove:
+            removals.add(key)
+
+    return TagRules(
+        rewrites=rewrites,
+        excludes=frozenset(excludes),
+        removals=frozenset(removals),
+    )
+
+
+def _coerce_raw_tags(raw_tags: list[str] | str | None) -> list[str]:
+    """Coerce the raw tag payload (list, hash-delimited string, or None)."""
+    if raw_tags is None:
+        return []
+    if isinstance(raw_tags, list):
+        return [tag.strip() for tag in raw_tags if tag and tag.strip()]
+    return [
+        tag.strip().rstrip(",") for tag in raw_tags.split("#") if tag and tag.strip()
+    ]
+
+
+async def process_tags(
+    raw_tags: list[str] | str | None,
+    rules: TagRules,
+    *,
+    extra_tags: list[str] | None = None,
+) -> list[str]:
+    """Normalize, rewrite, and de-duplicate tags.
+
+    Ported from ``pipeline/processor.py:262`` (simplified). Applies
+    rewrite rules, drops tags in ``rules.excludes``, appends
+    ``extra_tags``, and de-duplicates while preserving order.
+    """
+    tags = _coerce_raw_tags(raw_tags)
+    processed: list[str] = []
+    seen: set[str] = set()
+
+    if extra_tags:
+        for tag in extra_tags:
+            key = _normalize_tag_key(tag)
+            if not key or key in rules.excludes or key in seen:
+                continue
+            processed.append(tag)
+            seen.add(key)
+
+    for tag in tags:
+        lookup = _normalize_tag_key(tag)
+        final = rules.rewrites.get(lookup, tag)
+        final_key = _normalize_tag_key(final)
+        if not final_key or final_key in rules.excludes or final_key in seen:
+            continue
+        processed.append(final)
+        seen.add(final_key)
+
+    return processed
+
+
+def should_skip_for_tags(tags: list[str], rules: TagRules) -> bool:
+    """Return ``True`` iff any tag matches a removal rule.
+
+    Ported from ``pipeline/processor.py:336`` (``filter_by_tag``). The
+    legacy helper returned ``True`` when the event should be *kept*; this
+    inverts the sense to match the function name.
+    """
+    normalized = {_normalize_tag_key(tag) for tag in tags}
+    return not normalized.isdisjoint(rules.removals)
+
+
+# ---------------------------------------------------------------------------
+# Location resolution — ported from ``pipeline/processor.py:769``.
+# ---------------------------------------------------------------------------
+
+_FUZZY_THRESHOLD = 0.85
+_DEFAULT_LOCATION_EMOJI = "\U0001f3ad"  # 🎭
+
+
+async def resolve_location(
+    db: AsyncSession,
+    *,
+    location_name: str | None,
+    sublocation: str | None,
+    source_site_name: str,
+    event_name: str,
+) -> Location | None:
+    """Resolve a ``Location`` for an extracted event.
+
+    Matching order:
+      1. Exact match on normalized ``Location.name``.
+      2. Exact match on any normalized ``LocationAlternateName``.
+      3. Fuzzy match via :class:`difflib.SequenceMatcher` with ratio
+         >= 0.85 against normalized names.
+      4. Fallback exact match on ``source_site_name`` or ``event_name``.
+
+    If no match is found, a new :class:`Location` is created, flushed to
+    obtain its ``id``, and a :func:`geocode_location` Celery task is
+    enqueued. The caller owns the transaction: this function never
+    commits.
+    """
+    if not location_name:
+        return None
+
+    normalized_loc = _normalize_location_name(location_name)
+    normalized_sub = _normalize_location_name(sublocation)
+    normalized_event = _normalize_location_name(event_name)
+    normalized_site = _normalize_location_name(source_site_name)
+
+    full_loc = f"{normalized_loc} {normalized_sub}".strip()
+
+    stmt = select(Location).options(selectinload(Location.alternate_names))
+    result = await db.execute(stmt)
+    locations = list(result.scalars().all())
+
+    search_keys = [k for k in (normalized_loc, full_loc) if k]
+
+    # Step 1: exact match on normalized Location.name
+    for loc in locations:
+        if _normalize_location_name(loc.name) in search_keys:
+            return loc
+
+    # Step 2: exact match on any normalized alternate name
+    for loc in locations:
+        for alt in loc.alternate_names:
+            if _normalize_location_name(alt.alternate_name) in search_keys:
+                return loc
+
+    # Step 3: fuzzy match via SequenceMatcher ratio >= threshold
+    best_loc: Location | None = None
+    best_score = 0.0
+    for loc in locations:
+        candidates = [_normalize_location_name(loc.name)] + [
+            _normalize_location_name(alt.alternate_name) for alt in loc.alternate_names
+        ]
+        for candidate in candidates:
+            if not candidate:
+                continue
+            for key in search_keys:
+                if not key:
+                    continue
+                score = SequenceMatcher(None, candidate, key).ratio()
+                if score >= _FUZZY_THRESHOLD and score > best_score:
+                    best_loc = loc
+                    best_score = score
+    if best_loc is not None:
+        return best_loc
+
+    # Step 4: fallback on source_site_name / event_name exact normalized match
+    fallback_keys = [k for k in (normalized_site, normalized_event) if k]
+    if fallback_keys:
+        for loc in locations:
+            if _normalize_location_name(loc.name) in fallback_keys:
+                return loc
+            for alt in loc.alternate_names:
+                if _normalize_location_name(alt.alternate_name) in fallback_keys:
+                    return loc
+
+    # No match — create a new Location and enqueue geocoding.
+    new_loc = Location(name=location_name, emoji=_DEFAULT_LOCATION_EMOJI)
+    db.add(new_loc)
+    await db.flush()
+    geocode_location.delay(new_loc.id)
+    return new_loc
