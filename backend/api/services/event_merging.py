@@ -10,8 +10,12 @@ for the original reference implementation.
 
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from typing import Any
 
 STOP_WORDS: frozenset[str] = frozenset(
     {"the", "and", "for", "with", "from", "into", "your"}
@@ -367,3 +371,119 @@ def are_names_similar(name1: str, name2: str) -> bool:
             return True
 
     return False
+
+
+# ---------------------------------------------------------------------------
+# JSONB parsing helpers (ported from pipeline/merger.py lines 364-375, 563-610)
+# ---------------------------------------------------------------------------
+
+FUTURE_LIMIT_DAYS: int = 90
+ARCHIVE_GRACE_DAYS: int = 14
+
+
+@dataclass(frozen=True)
+class ParsedOccurrence:
+    """A single parsed occurrence from the JSONB ``occurrences`` column."""
+
+    start_date: date
+    start_time: str | None
+    end_date: date | None
+    end_time: str | None
+
+
+def _parse_jsonb(value: object) -> list[Any] | dict[str, Any] | None:
+    """Parse a JSONB value that may be a string, dict/list, or None.
+
+    Ported from ``pipeline/merger.py`` lines 364-375.
+    """
+    if value is None:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str):
+        try:
+            parsed = json.loads(value)
+        except (TypeError, ValueError):
+            return None
+        if isinstance(parsed, (dict, list)):
+            return parsed
+        return None
+    return None
+
+
+def _parse_date(value: object) -> date | None:
+    """Safely parse a YYYY-MM-DD string into a date, or None."""
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_time_str(value: object) -> str | None:
+    """Return the value as a string if non-empty, else None."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    return stripped or None
+
+
+def parse_occurrences(raw: object, *, today: date) -> list[ParsedOccurrence]:
+    """Parse and filter the JSONB ``occurrences`` column.
+
+    Keeps only occurrences whose ``start_date`` falls within
+    ``[today, today + FUTURE_LIMIT_DAYS]``. Malformed entries are skipped.
+
+    Ported from ``pipeline/merger.py`` lines 563-605.
+    """
+    parsed = _parse_jsonb(raw) or []
+    if not isinstance(parsed, list):
+        return []
+
+    future_limit = today + timedelta(days=FUTURE_LIMIT_DAYS)
+    result: list[ParsedOccurrence] = []
+
+    for occ in parsed:
+        if not isinstance(occ, dict):
+            continue
+        start_date = _parse_date(occ.get("start_date"))
+        if start_date is None:
+            continue
+        if not (today <= start_date <= future_limit):
+            continue
+
+        result.append(
+            ParsedOccurrence(
+                start_date=start_date,
+                start_time=_parse_time_str(occ.get("start_time")),
+                end_date=_parse_date(occ.get("end_date")),
+                end_time=_parse_time_str(occ.get("end_time")),
+            )
+        )
+
+    return result
+
+
+def parse_tags(raw: object) -> list[str]:
+    """Parse the JSONB ``tags`` column into a clean list of strings.
+
+    Drops non-string entries and strips whitespace from each tag. Empty
+    strings (after stripping) are also dropped.
+
+    Ported from ``pipeline/merger.py`` lines 607-610.
+    """
+    parsed = _parse_jsonb(raw) or []
+    if not isinstance(parsed, list):
+        return []
+
+    result: list[str] = []
+    for tag in parsed:
+        if not isinstance(tag, str):
+            continue
+        stripped = tag.strip()
+        if stripped:
+            result.append(stripped)
+    return result
