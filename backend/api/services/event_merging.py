@@ -17,11 +17,11 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models.base import EventStatus, ExtractedEventStatus
-from api.models.crawl import ExtractedEventLog
+from api.models.base import CrawlResultStatus, EventStatus, ExtractedEventStatus
+from api.models.crawl import CrawlResult, ExtractedEvent, ExtractedEventLog
 from api.models.event import Event, EventOccurrence, EventSource, EventTag, EventUrl
 from api.models.location import Location
 from api.models.tag import Tag
@@ -924,3 +924,385 @@ async def create_new_event(
     await db.flush()
 
     return new_event_id
+
+
+# ---------------------------------------------------------------------------
+# Top-level orchestrator and 14-day archiving
+# (ported from ``pipeline/merger.py`` lines 387-431, 525-562, 808-868
+# and ``pipeline/db.py:archive_outdated_events`` lines 447-548)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class MergeResult:
+    """Return value of :func:`merge_extracted_events`."""
+
+    new_events_count: int
+    merged_count: int
+    archived_count: int
+
+
+async def archive_outdated_events(
+    db: AsyncSession,
+    *,
+    source_id: int,
+    today: date,
+) -> tuple[int, list[tuple[int, str, date]]]:
+    """Archive events whose sources no longer list them in their latest crawl.
+
+    An active event linked to ``source_id`` is archived when, for **every**
+    source that has ever linked to it, the most recent crawl result from
+    that source (in ``processed``/``extracted`` status) does not reference
+    the event. A 14-day grace period applies: events with any occurrence
+    whose ``start_date >= today + 14 days`` are preserved.
+
+    Returns a tuple of ``(archived_count, upcoming_warnings)`` where
+    ``upcoming_warnings`` is a list of ``(event_id, name, next_occurrence)``
+    tuples for events that were archived despite having upcoming
+    occurrences (those strictly after ``today`` but strictly before the
+    14-day grace threshold).
+    """
+    # Candidate events: active, non-deleted, linked via EventSource to source_id.
+    candidate_stmt = (
+        select(Event.id, Event.name)
+        .join(EventSource, EventSource.event_id == Event.id)
+        .where(
+            Event.status == EventStatus.active,
+            Event.deleted_at.is_(None),
+            EventSource.source_id == source_id,
+        )
+        .distinct()
+    )
+    candidate_rows = (await db.execute(candidate_stmt)).all()
+    if not candidate_rows:
+        return 0, []
+
+    candidate_ids = [row[0] for row in candidate_rows]
+    names_by_id: dict[int, str] = {row[0]: row[1] for row in candidate_rows}
+
+    # All (event_id, source_id, extracted_event_id) triples for candidate events.
+    links_stmt = select(
+        EventSource.event_id,
+        EventSource.source_id,
+        EventSource.extracted_event_id,
+    ).where(EventSource.event_id.in_(candidate_ids))
+    link_rows = (await db.execute(links_stmt)).all()
+
+    # Map: event_id -> set of source_ids it's linked to.
+    sources_by_event: dict[int, set[int]] = {}
+    # Map: (event_id, source_id) -> set of extracted_event_ids
+    ee_by_event_source: dict[tuple[int, int], set[int]] = {}
+    all_source_ids: set[int] = set()
+    for event_id, src_id, ee_id in link_rows:
+        if src_id is None:
+            continue
+        sources_by_event.setdefault(event_id, set()).add(src_id)
+        all_source_ids.add(src_id)
+        if ee_id is not None:
+            ee_by_event_source.setdefault((event_id, src_id), set()).add(ee_id)
+
+    # Latest (by id) crawl_result per source in processed/extracted status.
+    latest_cr_by_source: dict[int, int] = {}
+    if all_source_ids:
+        latest_stmt = (
+            select(
+                CrawlResult.source_id,
+                func.max(CrawlResult.id).label("max_id"),
+            )
+            .where(
+                CrawlResult.source_id.in_(all_source_ids),
+                CrawlResult.status.in_(
+                    (CrawlResultStatus.processed, CrawlResultStatus.extracted)
+                ),
+            )
+            .group_by(CrawlResult.source_id)
+        )
+        for src_id, max_id in (await db.execute(latest_stmt)).all():
+            if max_id is not None:
+                latest_cr_by_source[src_id] = max_id
+
+    # For each latest crawl_result, pull the set of extracted_event_ids it produced.
+    ees_in_latest_cr: dict[int, set[int]] = {}
+    if latest_cr_by_source:
+        ee_stmt = select(ExtractedEvent.id, ExtractedEvent.crawl_result_id).where(
+            ExtractedEvent.crawl_result_id.in_(latest_cr_by_source.values())
+        )
+        for ee_id_val, cr_id in (await db.execute(ee_stmt)).all():
+            ees_in_latest_cr.setdefault(cr_id, set()).add(ee_id_val)
+
+    # Occurrences per candidate event — for grace period + upcoming warnings.
+    occ_stmt = select(EventOccurrence.event_id, EventOccurrence.start_date).where(
+        EventOccurrence.event_id.in_(candidate_ids)
+    )
+    occs_by_event: dict[int, list[date]] = {}
+    for event_id, start_date in (await db.execute(occ_stmt)).all():
+        if start_date is not None:
+            occs_by_event.setdefault(event_id, []).append(start_date)
+
+    grace_threshold = today + timedelta(days=ARCHIVE_GRACE_DAYS)
+
+    archived_count = 0
+    upcoming_warnings: list[tuple[int, str, date]] = []
+
+    for event_id in candidate_ids:
+        event_sources = sources_by_event.get(event_id, set())
+        if not event_sources:
+            continue
+
+        # An event is "still seen" if ANY of its linked sources' latest
+        # crawl contains any of its extracted_events.
+        still_seen = False
+        for src_id in event_sources:
+            latest_cr = latest_cr_by_source.get(src_id)
+            if latest_cr is None:
+                # No latest crawl -> treat source as "not seen here".
+                continue
+            latest_ees = ees_in_latest_cr.get(latest_cr, set())
+            event_ees = ee_by_event_source.get((event_id, src_id), set())
+            if event_ees & latest_ees:
+                still_seen = True
+                break
+        if still_seen:
+            continue
+
+        # 14-day grace: preserve if any occurrence is on/after today+14d.
+        occs = occs_by_event.get(event_id, [])
+        if any(d >= grace_threshold for d in occs):
+            continue
+
+        # Collect next-upcoming-occurrence warning (strictly > today).
+        future = sorted(d for d in occs if d > today)
+        if future:
+            upcoming_warnings.append((event_id, names_by_id[event_id], future[0]))
+
+        # Archive in-place.
+        event_obj = (
+            await db.execute(select(Event).where(Event.id == event_id))
+        ).scalar_one_or_none()
+        if event_obj is None:
+            continue
+        event_obj.status = EventStatus.archived
+        archived_count += 1
+
+    await db.flush()
+    return archived_count, upcoming_warnings
+
+
+async def merge_extracted_events(
+    db: AsyncSession,
+    *,
+    crawl_job_id: int | None = None,
+    today: date | None = None,
+) -> MergeResult:
+    """Top-level orchestrator: merge unprocessed extracted events and archive.
+
+    Loads every :class:`ExtractedEvent` whose parent crawl result is in
+    ``processed`` status and which has no :class:`EventSource` row yet,
+    runs each through :func:`select_matched_event_id` and either
+    :func:`merge_into_existing_event` or :func:`create_new_event`, updates
+    an in-memory dedup index so within-batch duplicates match, and finally
+    archives outdated events per affected source.
+
+    The caller owns the transaction; the orchestrator only calls
+    :meth:`AsyncSession.flush`.
+    """
+    if today is None:
+        today = date.today()
+
+    # Load unprocessed extracted events joined with their crawl_result
+    # (for source_id) and optional location (for lat/lng). Left-join
+    # EventSource to filter out already-processed rows.
+    unprocessed_stmt = (
+        select(
+            ExtractedEvent.id,
+            ExtractedEvent.name,
+            ExtractedEvent.short_name,
+            ExtractedEvent.description,
+            ExtractedEvent.emoji,
+            ExtractedEvent.sublocation,
+            ExtractedEvent.location_id,
+            ExtractedEvent.url,
+            CrawlResult.source_id,
+            Location.lat,
+            Location.lng,
+            ExtractedEvent.occurrences,
+            ExtractedEvent.tags,
+        )
+        .join(CrawlResult, CrawlResult.id == ExtractedEvent.crawl_result_id)
+        .join(Location, Location.id == ExtractedEvent.location_id, isouter=True)
+        .outerjoin(EventSource, EventSource.extracted_event_id == ExtractedEvent.id)
+        .where(
+            CrawlResult.status == CrawlResultStatus.processed,
+            EventSource.id.is_(None),
+        )
+    )
+    rows = (await db.execute(unprocessed_stmt)).all()
+
+    if not rows:
+        return MergeResult(new_events_count=0, merged_count=0, archived_count=0)
+
+    index = await load_dedup_index(db, today=today)
+
+    new_events_count = 0
+    merged_count = 0
+    affected_source_ids: set[int] = set()
+
+    for row in rows:
+        (
+            ee_id,
+            name,
+            short_name,
+            description,
+            emoji,
+            sublocation,
+            location_id,
+            url,
+            source_id,
+            lat,
+            lng,
+            raw_occurrences,
+            raw_tags,
+        ) = row
+
+        if not name:
+            continue
+
+        # source_id is a system invariant.
+        if source_id is None:
+            raise RuntimeError(
+                f"extracted_event {ee_id} has no source_id via crawl_results; "
+                "this violates a system invariant"
+            )
+
+        affected_source_ids.add(source_id)
+
+        if location_id is None:
+            await log_extracted_event(
+                db,
+                extracted_event_id=ee_id,
+                status=ExtractedEventStatus.skipped_no_location,
+                message="No location_id on extracted event",
+            )
+            continue
+
+        valid_occurrences = parse_occurrences(raw_occurrences, today=today)
+        if not valid_occurrences:
+            await log_extracted_event(
+                db,
+                extracted_event_id=ee_id,
+                status=ExtractedEventStatus.skipped_no_occurrences,
+                message="No valid future occurrences",
+            )
+            continue
+
+        tags = parse_tags(raw_tags)
+        lat_f = float(lat) if lat is not None else None
+        lng_f = float(lng) if lng is not None else None
+
+        extracted = ExtractedEventInput(
+            ee_id=ee_id,
+            name=name,
+            short_name=short_name,
+            description=description,
+            emoji=emoji,
+            sublocation=sublocation,
+            location_id=location_id,
+            url=url,
+            source_id=source_id,
+            lat=lat_f,
+            lng=lng_f,
+            occurrences=valid_occurrences,
+            tags=tags,
+        )
+
+        extracted_dates = {
+            str(occ.start_date) for occ in valid_occurrences if occ.start_date
+        }
+
+        matched_event_id = select_matched_event_id(
+            name=name,
+            extracted_dates=extracted_dates,
+            location_id=location_id,
+            lat=lat_f,
+            lng=lng_f,
+            source_id=source_id,
+            index=index,
+        )
+
+        if matched_event_id is not None:
+            await merge_into_existing_event(
+                db, event_id=matched_event_id, extracted=extracted
+            )
+            await log_extracted_event(
+                db,
+                extracted_event_id=ee_id,
+                status=ExtractedEventStatus.merged,
+                event_id=matched_event_id,
+                message=f"Merged with existing event {matched_event_id}",
+            )
+            await db.flush()
+            merged_count += 1
+
+            # Append this source to the dedup index so within-batch
+            # duplicates from other sources still match.
+            existing = next(
+                (
+                    c
+                    for c in index.by_source_id.get(source_id, [])
+                    if c.id == matched_event_id
+                ),
+                None,
+            )
+            if existing is None:
+                matched_name = next(
+                    (
+                        c.name
+                        for candidates in index.by_location_id.values()
+                        for c in candidates
+                        if c.id == matched_event_id
+                    ),
+                    name,
+                )
+                index.by_source_id.setdefault(source_id, []).append(
+                    EventCandidate(id=matched_event_id, name=matched_name)
+                )
+            # Widen the candidate's known dates so later rows in the same
+            # batch can still match via date overlap.
+            dates = index.dates_by_event_id.setdefault(matched_event_id, set())
+            dates.update(extracted_dates)
+        else:
+            new_event_id = await create_new_event(db, extracted=extracted)
+            await log_extracted_event(
+                db,
+                extracted_event_id=ee_id,
+                status=ExtractedEventStatus.created,
+                event_id=new_event_id,
+                message=f"Created new event {new_event_id}",
+            )
+            await db.flush()
+            new_events_count += 1
+
+            candidate = EventCandidate(id=new_event_id, name=name)
+            index.add(
+                candidate,
+                location_id=location_id,
+                lat=lat_f,
+                lng=lng_f,
+                source_id=source_id,
+                dates=extracted_dates,
+            )
+
+    # Archive outdated events for every source touched by this batch.
+    total_archived = 0
+    for src_id in affected_source_ids:
+        archived, _warnings = await archive_outdated_events(
+            db, source_id=src_id, today=today
+        )
+        total_archived += archived
+
+    await db.flush()
+    return MergeResult(
+        new_events_count=new_events_count,
+        merged_count=merged_count,
+        archived_count=total_archived,
+    )
