@@ -8,7 +8,7 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from api.celery_app import celery
+from api.celery_app import GEOCODING_QUEUE, celery
 from api.config import get_settings
 from api.models.location import Location
 from api.services.geocoding import geocode_location_name
@@ -46,7 +46,10 @@ async def _geocode_location(location_id: int) -> None:
             return
 
         result = await geocode_location_name(
-            location.name, api_key, address=location.address
+            location.name,
+            api_key,
+            address=location.address,
+            propagate_http_errors=True,
         )
 
         if result is None:
@@ -67,7 +70,7 @@ async def _geocode_location(location_id: int) -> None:
         )
 
 
-@celery.task(bind=True, name=GEOCODE_LOCATION)
+@celery.task(bind=True, name=GEOCODE_LOCATION, queue=GEOCODING_QUEUE)
 def geocode_location(self: Any, location_id: int) -> None:
     """Geocode a location by ID. Retries on API errors with exponential backoff."""
     try:

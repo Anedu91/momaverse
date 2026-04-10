@@ -65,6 +65,7 @@ async def geocode_location_name(
     *,
     address: str | None = None,
     client: httpx.AsyncClient | None = None,
+    propagate_http_errors: bool = False,
 ) -> GeocodingResult | None:
     """Forward-geocode a venue name via Geoapify, biased to Buenos Aires.
 
@@ -95,6 +96,8 @@ async def geocode_location_name(
                 resp.raise_for_status()
         data: dict[str, object] = resp.json()
     except httpx.HTTPError:
+        if propagate_http_errors:
+            raise
         return None
     results = data.get("results")
     if not isinstance(results, list) or not results:

@@ -61,7 +61,10 @@ class TestGeocodeLocationTask:
             await _geocode_location(loc_id)
 
         mock_geocode.assert_called_once_with(
-            "Test Venue", "fake-key", address="Av. Corrientes 1234"
+            "Test Venue",
+            "fake-key",
+            address="Av. Corrientes 1234",
+            propagate_http_errors=True,
         )
 
         loc = await db_session.get(Location, loc_id)
@@ -160,6 +163,31 @@ class TestGeocodeLocationTask:
             await _geocode_location(loc_id)
 
         mock_geocode.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_propagates_http_errors_for_retry(
+        self, db_session: AsyncSession, sample_location_no_coords: Location
+    ) -> None:
+        await db_session.flush()
+        loc_id = sample_location_no_coords.id
+
+        with (
+            patch(
+                "api.tasks.geocoding._make_session",
+                return_value=SessionFactoryStub(db_session),
+            ),
+            patch(
+                "api.tasks.geocoding.get_settings",
+                return_value=FakeSettings(geoapify_api_key="fake-key"),
+            ),
+            patch(
+                "api.tasks.geocoding.geocode_location_name",
+                new_callable=AsyncMock,
+                side_effect=httpx.HTTPError("timeout"),
+            ),
+        ):
+            with pytest.raises(httpx.HTTPError):
+                await _geocode_location(loc_id)
 
 
 class TestGeocodeLocationCeleryTask:

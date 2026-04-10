@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.celery_app import GEOCODING_QUEUE
 from api.database import get_db
 from api.dependencies import create_access_token, get_geoapify_key, hash_password
 from api.models.event import Event
@@ -17,6 +18,7 @@ from api.models.tag import Tag
 from api.models.user import User
 from api.routers.locations import router
 from api.services.geocoding import GeocodingResult
+from api.task_names import GEOCODE_LOCATION
 
 
 def _make_app(
@@ -38,11 +40,11 @@ def _make_app(
 
 
 @pytest.fixture(autouse=True)
-def _mock_celery_send_task():
+def mock_celery():
     """Prevent Celery from trying to connect to Redis during tests."""
-    with patch("api.routers.locations.celery") as mock_celery:
-        mock_celery.send_task = MagicMock()
-        yield mock_celery
+    with patch("api.routers.locations.celery") as celery_mock:
+        celery_mock.send_task = MagicMock()
+        yield celery_mock
 
 
 @pytest_asyncio.fixture
@@ -308,6 +310,28 @@ class TestCreateLocation:
         tag_names = [t["name"] for t in body["tags"]]
         assert "music" in tag_names
         assert "nightlife" in tag_names
+
+    @pytest.mark.asyncio
+    async def test_create_location_without_coords_enqueues_geocode_task(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        mock_celery: MagicMock,
+    ) -> None:
+        payload = {
+            "name": "Needs Geocode",
+            "address": "123 Art St",
+        }
+
+        resp = await client.post(
+            "/api/v1/locations/", json=payload, headers=auth_headers
+        )
+
+        assert resp.status_code == 201
+        mock_celery.send_task.assert_called_once()
+        call_args = mock_celery.send_task.call_args
+        assert call_args.args[0] == GEOCODE_LOCATION
+        assert call_args.kwargs.get("queue") == GEOCODING_QUEUE
 
     @pytest.mark.asyncio
     async def test_create_location_persists_website_url_and_type(

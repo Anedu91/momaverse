@@ -1,10 +1,14 @@
 from celery import Celery
+from kombu import Queue
 
 from api.config import get_settings
+from api.task_names import GEOCODE_LOCATION
 
 settings = get_settings()
 
 celery = Celery("momaverse")
+
+GEOCODING_QUEUE = "geocoding"
 
 celery.conf.update(
     broker_url=settings.redis_url,
@@ -18,5 +22,14 @@ celery.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
 )
+
+celery.conf.task_queues = (
+    Queue("default"),
+    Queue(GEOCODING_QUEUE),
+)
+
+celery.conf.task_routes = {
+    GEOCODE_LOCATION: {"queue": GEOCODING_QUEUE},
+}
 
 celery.autodiscover_tasks(["api.tasks"])

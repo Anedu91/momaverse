@@ -116,6 +116,20 @@ class TestGeocodeLocationName:
 
         assert result is None
 
+    async def test_http_error_propagates_when_requested(self):
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("Connection failed"))
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+
+        with patch(
+            "api.services.geocoding.httpx.AsyncClient", return_value=mock_client
+        ):
+            with pytest.raises(httpx.HTTPError):
+                await geocode_location_name(
+                    "Some Place", "fake-key", propagate_http_errors=True
+                )
+
     async def test_outside_buenos_aires(self):
         mock_response = MagicMock()
         mock_response.json.return_value = _mock_geoapify_response(

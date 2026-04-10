@@ -8,7 +8,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import selectinload
 
-from api.celery_app import celery
+from api.celery_app import GEOCODING_QUEUE, celery
 from api.dependencies import AdminUserDep, CurrentUserDep, GeoapifyKeyDep, SessionDep
 from api.models.event import Event
 from api.models.location import Location, LocationAlternateName, LocationTag
@@ -409,7 +409,7 @@ async def create_location(
     await db.commit()
 
     if data.lat is None and data.lng is None:
-        celery.send_task(GEOCODE_LOCATION, args=[location_id])
+        celery.send_task(GEOCODE_LOCATION, args=[location_id], queue=GEOCODING_QUEUE)
 
     location = await _refresh_location(db, location_id)
     return LocationDetailResponse.model_validate(location)
