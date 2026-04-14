@@ -13,9 +13,16 @@ from __future__ import annotations
 import json
 import re
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.models.base import EventStatus
+from api.models.event import Event, EventOccurrence, EventSource
+from api.models.location import Location
 
 STOP_WORDS: frozenset[str] = frozenset(
     {"the", "and", "for", "with", "from", "into", "your"}
@@ -487,3 +494,143 @@ def parse_tags(raw: object) -> list[str]:
         if stripped:
             result.append(stripped)
     return result
+
+
+# ---------------------------------------------------------------------------
+# Dedup index — ported from ``pipeline/merger.py`` lines 437-520.
+# ---------------------------------------------------------------------------
+
+RECENT_BUFFER_DAYS: int = 10
+
+
+@dataclass(frozen=True)
+class EventCandidate:
+    """A lightweight reference to an existing event for dedup matching."""
+
+    id: int
+    name: str
+
+
+@dataclass
+class DedupIndex:
+    """Three lookup indexes plus a per-event set of future occurrence dates.
+
+    Mirrors the in-memory maps built at the top of
+    ``pipeline/merger.py:merge_extracted_events`` so the async backend can
+    perform the same dedup lookups by location_id, coordinates, or
+    source_id.
+    """
+
+    by_location_id: dict[int, list[EventCandidate]] = field(default_factory=dict)
+    by_coords: dict[tuple[float, float], list[EventCandidate]] = field(
+        default_factory=dict
+    )
+    by_source_id: dict[int, list[EventCandidate]] = field(default_factory=dict)
+    dates_by_event_id: dict[int, set[str]] = field(default_factory=dict)
+
+    def add(
+        self,
+        candidate: EventCandidate,
+        *,
+        location_id: int | None,
+        lat: float | None,
+        lng: float | None,
+        source_id: int | None,
+        dates: set[str],
+    ) -> None:
+        """Insert ``candidate`` into every index for which it has a key."""
+        if location_id is not None:
+            self.by_location_id.setdefault(location_id, []).append(candidate)
+
+        if lat is not None and lng is not None:
+            key = (round(float(lat), 5), round(float(lng), 5))
+            self.by_coords.setdefault(key, []).append(candidate)
+
+        if source_id is not None:
+            self.by_source_id.setdefault(source_id, []).append(candidate)
+
+        self.dates_by_event_id[candidate.id] = set(dates)
+
+
+async def load_dedup_index(db: AsyncSession, *, today: date) -> DedupIndex:
+    """Build a :class:`DedupIndex` of active events with future occurrences.
+
+    Ported from ``pipeline/merger.py`` lines 437-520. Selects active,
+    non-soft-deleted events whose occurrences fall within
+    ``[today - RECENT_BUFFER_DAYS, today + FUTURE_LIMIT_DAYS]``, and
+    populates the three lookup maps plus the per-event date set used for
+    downstream dedup.
+    """
+    recent_cutoff = today - timedelta(days=RECENT_BUFFER_DAYS)
+    future_limit = today + timedelta(days=FUTURE_LIMIT_DAYS)
+
+    stmt = (
+        select(
+            Event.id,
+            Event.name,
+            Event.location_id,
+            Location.lat,
+            Location.lng,
+            EventOccurrence.start_date,
+        )
+        .join(EventOccurrence, EventOccurrence.event_id == Event.id)
+        .join(Location, Location.id == Event.location_id, isouter=True)
+        .where(
+            Event.status == EventStatus.active,
+            Event.deleted_at.is_(None),
+            EventOccurrence.start_date >= recent_cutoff,
+            EventOccurrence.start_date <= future_limit,
+        )
+    )
+    rows = (await db.execute(stmt)).all()
+
+    index = DedupIndex()
+    # Accumulate per-event metadata before touching indexes so we only call
+    # ``add`` once per event (preserving the merger's de-duplication
+    # behaviour across multiple matching occurrences).
+    per_event: dict[int, dict[str, Any]] = {}
+    for event_id, name, location_id, lat, lng, start_date in rows:
+        entry = per_event.setdefault(
+            event_id,
+            {
+                "name": name,
+                "location_id": location_id,
+                "lat": lat,
+                "lng": lng,
+                "dates": set(),
+            },
+        )
+        if start_date is not None:
+            entry["dates"].add(str(start_date))
+
+    if not per_event:
+        return index
+
+    # Second query: source_ids for these events.
+    source_stmt = select(EventSource.event_id, EventSource.source_id).where(
+        EventSource.event_id.in_(per_event.keys()),
+        EventSource.source_id.is_not(None),
+    )
+    source_rows = (await db.execute(source_stmt)).all()
+
+    source_ids_by_event: dict[int, list[int]] = {}
+    for event_id, source_id in source_rows:
+        source_ids_by_event.setdefault(event_id, []).append(source_id)
+
+    for event_id, meta in per_event.items():
+        candidate = EventCandidate(id=event_id, name=meta["name"])
+        source_ids = source_ids_by_event.get(event_id, [])
+        # Insert into location/coord indexes once per event.
+        index.add(
+            candidate,
+            location_id=meta["location_id"],
+            lat=meta["lat"],
+            lng=meta["lng"],
+            source_id=None,
+            dates=meta["dates"],
+        )
+        # Then append to the source index once per (event, source).
+        for source_id in source_ids:
+            index.by_source_id.setdefault(source_id, []).append(candidate)
+
+    return index
