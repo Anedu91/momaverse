@@ -20,7 +20,8 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.models.base import EventStatus
+from api.models.base import EventStatus, ExtractedEventStatus
+from api.models.crawl import ExtractedEventLog
 from api.models.event import Event, EventOccurrence, EventSource
 from api.models.location import Location
 
@@ -634,3 +635,119 @@ async def load_dedup_index(db: AsyncSession, *, today: date) -> DedupIndex:
             index.by_source_id.setdefault(source_id, []).append(candidate)
 
     return index
+
+
+# ---------------------------------------------------------------------------
+# Match selection and audit logging
+# (ported from ``pipeline/merger.py`` lines 378-384, 617-652)
+# ---------------------------------------------------------------------------
+
+
+def find_best_match(
+    name: str,
+    extracted_dates: set[str],
+    candidates: list[EventCandidate],
+    dates_by_event_id: dict[int, set[str]],
+) -> int | None:
+    """Find the best matching event id among ``candidates``.
+
+    Requires a date overlap between ``extracted_dates`` and each
+    candidate's occurrence dates, then uses :func:`are_names_similar` to
+    filter similar names. Prefers an exact normalized-name match; if none
+    is found, returns the first partial match.
+
+    Ported from ``pipeline/merger.py`` lines 621-632.
+    """
+    norm_name = normalize_name_for_dedup(name)
+    best_id: int | None = None
+    for existing in candidates:
+        existing_dates = dates_by_event_id.get(existing.id, set())
+        if not (extracted_dates & existing_dates):
+            continue
+        if not are_names_similar(name, existing.name):
+            continue
+        if normalize_name_for_dedup(existing.name) == norm_name:
+            return existing.id
+        if best_id is None:
+            best_id = existing.id
+    return best_id
+
+
+def select_matched_event_id(
+    *,
+    name: str,
+    extracted_dates: set[str],
+    location_id: int | None,
+    lat: float | None,
+    lng: float | None,
+    source_id: int,
+    index: DedupIndex,
+) -> int | None:
+    """Return an existing event id using location -> coords -> source fallback.
+
+    Ported from ``pipeline/merger.py`` lines 634-652. Tries, in order:
+
+    1. Exact ``location_id`` lookup in :attr:`DedupIndex.by_location_id`.
+    2. Rounded ``(lat, lng)`` lookup in :attr:`DedupIndex.by_coords`.
+    3. ``source_id`` lookup in :attr:`DedupIndex.by_source_id`.
+
+    Each candidate list is resolved via :func:`find_best_match`.
+    """
+    # 1. Try matching by location_id first (most precise and reliable).
+    if location_id is not None and location_id in index.by_location_id:
+        matched = find_best_match(
+            name,
+            extracted_dates,
+            index.by_location_id[location_id],
+            index.dates_by_event_id,
+        )
+        if matched is not None:
+            return matched
+
+    # 2. Fallback: match by rounded coordinates.
+    if lat is not None and lng is not None:
+        key = (round(float(lat), 5), round(float(lng), 5))
+        if key in index.by_coords:
+            matched = find_best_match(
+                name,
+                extracted_dates,
+                index.by_coords[key],
+                index.dates_by_event_id,
+            )
+            if matched is not None:
+                return matched
+
+    # 3. Last-resort fallback: match by source_id.
+    if source_id in index.by_source_id:
+        matched = find_best_match(
+            name,
+            extracted_dates,
+            index.by_source_id[source_id],
+            index.dates_by_event_id,
+        )
+        if matched is not None:
+            return matched
+
+    return None
+
+
+async def log_extracted_event(
+    db: AsyncSession,
+    *,
+    extracted_event_id: int,
+    status: ExtractedEventStatus,
+    event_id: int | None = None,
+    message: str | None = None,
+) -> None:
+    """Insert an :class:`ExtractedEventLog` row. Does not commit.
+
+    Ported from ``pipeline/merger.py`` lines 378-384.
+    """
+    db.add(
+        ExtractedEventLog(
+            extracted_event_id=extracted_event_id,
+            status=status,
+            event_id=event_id,
+            message=message,
+        )
+    )
