@@ -96,3 +96,60 @@ def get_significant_words(name: str, *, stem: bool = False) -> frozenset[str]:
     if stem:
         result = {stem_word(w) for w in result}
     return frozenset(result)
+
+
+KNOWN_PROGRAM_PREFIXES: tuple[str, ...] = ("FIDO",)
+
+PRESENTER_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(r"^.+?\s+presents?\s*:?\s*", re.IGNORECASE),
+    re.compile(r"^.+?\s+productions?\s*:?\s*", re.IGNORECASE),
+    re.compile(r"^hosted\s+by\s+.+?:\s*", re.IGNORECASE),
+)
+
+_BRACKETED_PREFIX_RE = re.compile(r"^\s*\[[^\]]+\]\s*")
+
+
+def strip_common_prefixes(name: str) -> str:
+    """Strip common prefixes that don't change event identity.
+
+    Handles:
+    - Bracketed prefixes: ``[member-only]``, ``[free]``, ``[virtual]``, etc.
+    - Known event program prefixes: ``FIDO`` (Prospect Park dog events), etc.
+
+    Examples:
+        ``"[member-only] Sewing Machines"`` -> ``"Sewing Machines"``
+        ``"FIDO Coffee Bark"`` -> ``"Coffee Bark"``
+        ``"[FREE] Jazz in the Park"`` -> ``"Jazz in the Park"``
+    """
+    result = name.strip()
+    result = _BRACKETED_PREFIX_RE.sub("", result)
+
+    for prefix in KNOWN_PROGRAM_PREFIXES:
+        pattern = rf"^{re.escape(prefix)}\s+"
+        result = re.sub(pattern, "", result, flags=re.IGNORECASE)
+
+    return result.strip()
+
+
+def extract_core_title(name: str) -> str:
+    """Extract the core title by removing presenter prefixes and subtitles.
+
+    Examples:
+        ``"Manhattan Theatre Club Presents The Monsters"`` -> ``"The Monsters"``
+        ``"The Monsters: a Sibling Love Story"`` -> ``"The Monsters"``
+        ``"Lincoln Center Presents: Jazz at Midnight"`` -> ``"Jazz at Midnight"``
+        ``"[member-only] Sewing Class"`` -> ``"Sewing Class"``
+        ``"FIDO Coffee Bark"`` -> ``"Coffee Bark"``
+    """
+    result = strip_common_prefixes(name)
+
+    for pattern in PRESENTER_PATTERNS:
+        result = pattern.sub("", result)
+
+    # Remove subtitles after colon, but keep if main title is too short.
+    if ":" in result:
+        main_title = result.split(":", 1)[0].strip()
+        if len(main_title) >= 5:
+            result = main_title
+
+    return result.strip()
